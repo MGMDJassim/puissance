@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft - Puissance 4</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="panel">
+        <h1>PUISSANCE 4</h1>
+        <div id="choix">        
+                <button id="jvjButton" onclick="choisirMode(event)">Jv/J</button>
+                <button id="jviaButton" onclick="choisirMode(event)">Jv/IA</button>
+                <button id="iavIaButton" onclick="afficherOptions()">IAv/IA</button>
+        </div>
+
+        <div class="game-container" >
+            <div class="grille" >
+                    <div id="gameBoard"></div>
+                    <div class="game-controls">
+                        <button id="resetButton" onclick="resetGame()">Recommencer</button>
+                        <button id="undoButton" onclick="undoMove()">Annuler le dernier coup</button>
+                        <button id="arriereButton" onclick="goBack()">Menu</button>
+                    </div>
+            </div>
+
+            <div class="side-menu">
+                <h3>Paramètres</h3>
+                <div class="menu-section">
+                    <h4>Mode de jeu</h4>
+                    <button onclick="changerMode('jvj')" class="menu-btn">Joueur vs Joueur</button>
+                    <button onclick="changerMode('jvia')" class="menu-btn">Joueur vs IA</button>
+                </div>
+                <div class="menu-section">
+                    <h4>Difficulté IA</h4>
+                    <div class="difficulty-buttons">
+                        <button onclick="changerDifficulte(1)" class="diff-btn" data-level="1">Facile</button>
+                        <button onclick="changerDifficulte(3)" class="diff-btn active" data-level="3">Moyen</button>
+                        <button onclick="changerDifficulte(5)" class="diff-btn" data-level="5">Difficile</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h4>Informations</h4>
+                    <div id="gameInfo">
+                        <p><strong>Mode:</strong> <span id="currentMode">-</span></p>
+                        <p><strong>Difficulté:</strong> <span id="currentDifficulty">Moyen</span></p>
+                        <p><strong>Tour:</strong> <span id="turnCount">0</span></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="js/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+package com.webapp.puissance.controller;
+
+import com.webapp.puissance.model.Game;
+import com.webapp.puissance.service.GameService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Contrôleur REST pour l'API du jeu Puissance 4
+ * Version simplifiée sans base de données
+ */
+@RestController
+@RequestMapping("/api/game")
+@CrossOrigin(origins = "*")  // Permet les requêtes depuis le frontend
+public class GameController {
+    
+    @Autowired
+    private GameService gameService;
+    
+    /**
+     * Créer une nouvelle partie
+     * POST /api/game/new
+     * @return JSON avec l'état initial de la partie
+     */
+    @PostMapping("/new")
+    public ResponseEntity<Map<String, Object>> createNewGame() {
+        Game game = gameService.createNewGame();
+        Map<String, Object> response = buildGameResponse(game);
+        response.put("aiMode", false);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Créer une nouvelle partie contre l'IA
+     * POST /api/game/new-ai?difficulty=3
+     * @param difficulty niveau de difficulté (1=Facile, 3=Moyen, 5=Difficile)
+     * @return JSON avec l'état initial de la partie
+     */
+    @PostMapping("/new-ai")
+    public ResponseEntity<Map<String, Object>> createNewGameWithAI(
+            @RequestParam(defaultValue = "3") int difficulty) {
+        Game game = gameService.createNewGameWithAI(difficulty);
+        Map<String, Object> response = buildGameResponse(game);
+        response.put("aiMode", true);
+        response.put("aiDifficulty", difficulty);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Récupérer l'état de la partie courante
+     * GET /api/game/current
+     * @return JSON avec l'état de la partie
+     */
+    @GetMapping("/current")
+    public ResponseEntity<Map<String, Object>> getCurrentGame() {
+        Game game = gameService.getCurrentGame();
+        Map<String, Object> response = buildGameResponse(game);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Jouer un coup
+     * POST /api/game/move?column=3
+     * @param column la colonne où jouer (0-8)
+     * @return JSON avec l'état mis à jour
+     */
+    @PostMapping("/move")
+    public ResponseEntity<Map<String, Object>> playMove(@RequestParam int column) {
+        int row = gameService.playMove(column);
+        
+        if (row == -1) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Coup invalide - colonne pleine ou hors limites"));
+        }
+        
+        Game game = gameService.getCurrentGame();
+        Map<String, Object> response = buildGameResponse(game);
+        response.put("row", row);  // Ajouter la ligne où le jeton est tombé
+        
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Réinitialiser la partie
+     * POST /api/game/reset
+     * @return JSON avec l'état réinitialisé
+     */
+    @PostMapping("/reset")
+    public ResponseEntity<Map<String, Object>> resetGame() {
+        gameService.resetGame();
+        Game game = gameService.getCurrentGame();
+        Map<String, Object> response = buildGameResponse(game);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Annuler le dernier coup
+     * POST /api/game/undo
+     * @return JSON avec l'état après annulation
+     */
+    @PostMapping("/undo")
+    public ResponseEntity<Map<String, Object>> undoMove() {
+        gameService.undoMove();
+        Game game = gameService.getCurrentGame();
+        Map<String, Object> response = buildGameResponse(game);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * L'IA joue automatiquement son coup
+     * POST /api/game/ai-move
+     * @return JSON avec l'état après le coup de l'IA
+     */
+    @PostMapping("/ai-move")
+    public ResponseEntity<Map<String, Object>> playAIMove() {
+        try {
+            int row = gameService.playAIMove();
+            
+            if (row == -1) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "L'IA ne peut pas jouer"));
+            }
+            
+            Game game = gameService.getCurrentGame();
+            Map<String, Object> response = buildGameResponse(game);
+            response.put("row", row);
+            response.put("aiPlayed", true);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * Obtenir les scores de chaque colonne selon l'IA (pour debug/UI)
+     * GET /api/game/ai-scores
+     * @return JSON avec les scores par colonne
+     */
+    @GetMapping("/ai-scores")
+    public ResponseEntity<Map<String, Object>> getAIScores() {
+        int[] scores = gameService.getAIColumnScores();
+        Map<String, Object> response = new HashMap<>();
+        response.put("columnScores", scores);
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Construire la réponse JSON avec toutes les infos du jeu
+     */
+    private Map<String, Object> buildGameResponse(Game game) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("board", game.getBoardCopy());
+        response.put("currentPlayer", game.getCurrentPlayer());
+        response.put("gameOver", game.isGameOver());
+        response.put("winner", game.getWinner());
+        response.put("winningPositions", game.getWinningPositions());
+        response.put("rows", game.getRows());
+        response.put("cols", game.getCols());
+        response.put("moveHistory", game.getMoveHistory());
+        response.put("aiMode", gameService.isAIMode());
+        response.put("aiDifficulty", gameService.getAIDifficulty());
+        return response;
+    }
+}
