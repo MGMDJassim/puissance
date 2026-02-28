@@ -1,15 +1,13 @@
-// Variables globales
-let gameMode = null; // 'jvj', 'jvia', 'iavia'
+let gameMode = null;
 let currentPlayer = 1;
 let gameOver = false;
-let aiDifficulty = 3; // Par défaut: moyen
+let aiDifficulty = 3;
 let turnCount = 0;
 
 
 async function choisirMode(event){
     const mode = event.target.id;
     
-    // Déterminer le mode de jeu
     if (mode === 'jvjButton') {
         gameMode = 'jvj';
         await startNewGame();
@@ -138,12 +136,10 @@ async function handleCellClick(column) {
             }
             return;
         }
-
-        // Si c'est le mode JvIA et que c'est maintenant le tour de l'IA
         if (gameMode === 'jvia' && !gameData.gameOver && gameData.currentPlayer === 2) {
             setTimeout(async () => {
                 await playAIMove();
-            }, 500); // Petit délai pour l'effet visuel
+            }, 500);
         }
     } catch (error) {
         console.error("Erreur lors du coup:", error);
@@ -193,7 +189,6 @@ async function resetGame() {
         updateGameInfo();
     } catch (error) {
         console.error('Erreur lors de la réinitialisation:', error);
-        // Fallback: créer une nouvelle partie
         if (gameMode === 'jvj') {
             startNewGame();
         } else if (gameMode === 'jvia') {
