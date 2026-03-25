@@ -1,8 +1,7 @@
 services:
   - type: web
     name: puissance
-    env: java
+    runtime: docker
     plan: free
-    buildCommand: ./mvnw clean package -DskipTests
-    startCommand: java -jar target/puissance-0.0.1-SNAPSHOT.jar
-    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    autoDeployTrigger: commit
