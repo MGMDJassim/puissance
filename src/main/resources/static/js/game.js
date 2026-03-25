@@ -3,6 +3,7 @@ let currentPlayer = 1;
 let gameOver = false;
 let aiDifficulty = 3;
 let turnCount = 0;
+let isProcessing = false; // Empêche les clics multiples
 
 
 async function choisirMode(event){
@@ -27,6 +28,7 @@ async function startNewGame() {
     currentPlayer = gameData.currentPlayer;
     gameOver = false;
     turnCount = 0;
+    isProcessing = false;
 
     afficherGameBoard(gameData);
     updateStatusMessage();
@@ -44,6 +46,7 @@ async function startNewGameWithAI(difficulty) {
     gameOver = false;
     turnCount = 0;
     aiDifficulty = difficulty;
+    isProcessing = false;
 
     afficherGameBoard(gameData);
     updateStatusMessage();
@@ -106,6 +109,11 @@ function generateGameBoard(board, rows, cols){
 }
 
 async function handleCellClick(column) {
+    // Bloquer les clics si une action est déjà en cours
+    if (isProcessing) {
+        return;
+    }
+    
     if (gameOver) {
         alert("La partie est terminée ! Cliquez sur 'Recommencer' pour une nouvelle partie.");
         return;
@@ -115,9 +123,18 @@ async function handleCellClick(column) {
         return;
     }
 
+    isProcessing = true; // Verrouiller les clics
+    
     try {
         const response = await fetch(`/api/game/move?column=${column}`, {method: 'POST'});
         const gameData = await response.json();
+
+        // Vérifier si la réponse contient une erreur
+        if (gameData.error || !response.ok) {
+            alert(gameData.error || "Impossible de jouer ce coup. Colonne pleine ?");
+            isProcessing = false;
+            return;
+        }
 
         turnCount++;
         afficherGameBoard(gameData);
@@ -144,10 +161,18 @@ async function handleCellClick(column) {
     } catch (error) {
         console.error("Erreur lors du coup:", error);
         alert("Impossible de jouer ce coup. Colonne pleine ?");
+    } finally {
+        isProcessing = false; // Déverrouiller les clics
     }
 }
 
 async function playAIMove() {
+    if (isProcessing) {
+        return;
+    }
+    
+    isProcessing = true;
+    
     try {
         const response = await fetch('/api/game/ai-move', {method: 'POST'});
         const gameData = await response.json();
@@ -168,13 +193,21 @@ async function playAIMove() {
         }
     } catch (error) {
         console.error("Erreur lors du coup de l'IA:", error);
+    } finally {
+        isProcessing = false;
     }
 }
 
 async function resetGame() {
+    if (isProcessing) {
+        return;
+    }
+    
     if (!confirm('Voulez-vous vraiment recommencer la partie ?')) {
         return;
     }
+    
+    isProcessing = true;
     
     try {
         const response = await fetch('/api/game/reset', {method: 'POST'});
@@ -194,6 +227,8 @@ async function resetGame() {
         } else if (gameMode === 'jvia') {
             startNewGameWithAI(aiDifficulty);
         }
+    } finally {
+        isProcessing = false;
     }
 }
 
@@ -203,6 +238,7 @@ function goBack() {
     gameMode = null;
     gameOver = false;
     turnCount = 0;
+    isProcessing = false;
 }
 
 async function undoMove() {
