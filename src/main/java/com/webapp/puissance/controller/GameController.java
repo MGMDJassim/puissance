@@ -11,13 +11,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Contrôleur REST pour l'API du jeu Puissance 4
- * Version simplifiée sans base de données
- */
+
 @RestController
 @RequestMapping("/api/game")
-@CrossOrigin(origins = "*")  // Permet les requêtes depuis le frontend
+@CrossOrigin(origins = "*") 
 public class GameController {
     
     @Autowired
