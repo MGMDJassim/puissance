@@ -12,9 +12,6 @@ async function choisirMode(event){
     if (mode === 'jvjButton') {
         gameMode = 'jvj';
         await startNewGame();
-    } else if (mode === 'jviaButton') {
-        gameMode = 'jvia';
-        await startNewGameWithAI(3);
     }
 }
 
@@ -284,6 +281,12 @@ async function resetGame() {
     isProcessing = true;
     
     try {
+        // Marquer la partie actuelle comme abandonnée
+        if (!gameOver) {
+            await fetch('/api/game/abandon', {method: 'POST'})
+                .catch(error => console.error('Erreur abandon:', error));
+        }
+        
         const response = await fetch('/api/game/reset', {method: 'POST'});
         const gameData = await response.json();
         
@@ -307,6 +310,13 @@ async function resetGame() {
 }
 
 function goBack() {
+    // Marquer la partie comme abandonnée si elle n'est pas terminée
+    if (!gameOver) {
+        fetch('/api/game/abandon', {method: 'POST'})
+            .then(response => response.json())
+            .catch(error => console.error('Erreur abandon:', error));
+    }
+    
     document.querySelector(".game-container").style.display = "none";
     document.getElementById("choix").style.display = "flex";
     gameMode = null;
@@ -435,7 +445,7 @@ async function showGameHistory() {
     const historyList = document.getElementById('historyList');
     
     modal.style.display = 'flex';
-    historyList.innerHTML = '<p class="empty-message">📥 Chargement des parties...</p>';
+    historyList.innerHTML = '<p class="empty-message"> Chargement des parties...</p>';
     
     try {
         const response = await fetch('/api/game/history');
@@ -445,7 +455,7 @@ async function showGameHistory() {
         console.log('Games:', data.games);
         
         if (!data.games || data.games.length === 0) {
-            historyList.innerHTML = '<p class="empty-message">❌ Aucune partie enregistrée</p>';
+            historyList.innerHTML = '<p class="empty-message"> Aucune partie enregistrée</p>';
             return;
         }
         
@@ -462,13 +472,13 @@ async function showGameHistory() {
                         <span class="game-item-status ${statusClass}">${statusLabel}</span>
                     </div>
                     <div class="game-item-details">
-                        <p><strong>📅 Date:</strong> ${createdAt}</p>
-                        <p><strong>📏 Grille:</strong> ${game.rows}x${game.cols}</p>
-                        <p><strong>🎮 Joueur actuel:</strong> Joueur ${game.currentPlayer}</p>
+                        <p><strong>Date:</strong> ${createdAt}</p>
+                        <p><strong>Grille:</strong> ${game.rows}x${game.cols}</p>
+                        <p><strong>Joueur actuel:</strong> Joueur ${game.currentPlayer}</p>
                     </div>
                     <div class="game-item-actions">
-                        <button class="btn-replay" onclick="replayGame(${game.id})">▶️ Rejouer</button>
-                        <button class="btn-delete" onclick="deleteGame(${game.id})">🗑️ Supprimer</button>
+                        <button class="btn-replay" onclick="replayGame(${game.id})">Rejouer</button>
+                        <button class="btn-delete" onclick="deleteGame(${game.id})">Supprimer</button>
                     </div>
                 </div>
             `;
@@ -478,7 +488,7 @@ async function showGameHistory() {
         
     } catch (error) {
         console.error('Erreur lors du chargement de l\'historique:', error);
-        historyList.innerHTML = '<p class="empty-message">⚠️ Erreur de chargement</p>';
+        historyList.innerHTML = '<p class="empty-message">Erreur de chargement</p>';
     }
 }
 
@@ -498,9 +508,9 @@ function formatDate(dateString) {
 
 function getStatusLabel(status) {
     const statusMap = {
-        'EN_COURS': '⏳ En cours',
-        'TERMINEE': '✅ Terminée',
-        'ABANDONNEE': '❌ Abandonnée'
+        'EN_COURS': 'En cours',
+        'TERMINEE': 'Terminée',
+        'ABANDONNEE': 'Abandonnée'
     };
     return statusMap[status] || status;
 }
@@ -584,16 +594,16 @@ async function replayGame(gameId) {
             buttons.forEach(btn => btn.disabled = true);
         }
         
-        alert(`🎬 Replay de la partie #${gameId} - ${turnCount} coups joués`);
+        alert(`Replay de la partie #${gameId} - ${turnCount} coups joués`);
         
     } catch (error) {
         console.error('Erreur lors du chargement de la partie:', error);
-        alert('⚠️ Erreur lors du chargement de la partie: ' + error.message);
+        alert('Erreur lors du chargement de la partie: ' + error.message);
     }
 }
 
 async function deleteGame(gameId) {
-    if (!confirm('🗑️ Êtes-vous sûr de vouloir supprimer cette partie ?')) {
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette partie ?')) {
         return;
     }
     
@@ -603,14 +613,14 @@ async function deleteGame(gameId) {
         });
         
         if (response.ok) {
-            alert('✅ Partie supprimée avec succès');
+            alert('Partie supprimée avec succès');
             showGameHistory();
         } else {
-            alert('⚠️ Erreur lors de la suppression');
+            alert('Erreur lors de la suppression');
         }
     } catch (error) {
         console.error('Erreur lors de la suppression:', error);
-        alert('⚠️ Erreur lors de la suppression');
+        alert('Erreur lors de la suppression');
     }
 }
 
@@ -632,10 +642,10 @@ async function loadSuggestion() {
         const suggestionText = document.getElementById('suggestionText');
         
         let predictionEmoji = '';
-        if (data.prediction === 'victoire') predictionEmoji = '✅ Victoire';
-        else if (data.prediction === 'defaite') predictionEmoji = '❌ Défaite';
-        else if (data.prediction === 'nul') predictionEmoji = '🤝 Nul';
-        else predictionEmoji = '❓ Incertaine';
+        if (data.prediction === 'victoire') predictionEmoji = 'Victoire';
+        else if (data.prediction === 'defaite') predictionEmoji = 'Défaite';
+        else if (data.prediction === 'nul') predictionEmoji = ' Nul';
+        else predictionEmoji = ' Incertaine';
         
         suggestionText.innerHTML = `
             <strong>Colonne: ${data.suggestedColumn}</strong><br>
@@ -644,7 +654,7 @@ async function loadSuggestion() {
         `;
     } catch (error) {
         console.error('Erreur suggestion:', error);
-        document.getElementById('suggestionText').innerHTML = '⚠️ Erreur de calcul';
+        document.getElementById('suggestionText').innerHTML = 'Erreur de calcul';
     }
 }
 
@@ -662,7 +672,7 @@ async function loadStats() {
         document.getElementById('statsDraws').innerHTML = `Nuls: <strong>${stats.draws}</strong>`;
     } catch (error) {
         console.error('Erreur stats:', error);
-        document.getElementById('statsBox').innerHTML = '⚠️ Erreur de chargement';
+        document.getElementById('statsBox').innerHTML = ' Erreur de chargement';
     }
 }
 
@@ -679,7 +689,7 @@ async function analyzeImage() {
     const file = fileInput.files[0];
     
     if (!file) {
-        document.getElementById('analysisResult').textContent = '❌ Veuillez sélectionner une image';
+        document.getElementById('analysisResult').textContent = ' Veuillez sélectionner une image';
         return;
     }
     
@@ -687,7 +697,7 @@ async function analyzeImage() {
     formData.append('image', file);
     
     try {
-        document.getElementById('analysisResult').textContent = '⏳ Analyse en cours...';
+        document.getElementById('analysisResult').textContent = ' Analyse en cours...';
         
         const response = await fetch('/api/game/analyze-image', {
             method: 'POST',
@@ -697,11 +707,11 @@ async function analyzeImage() {
         const result = await response.json();
         
         if (!response.ok) {
-            document.getElementById('analysisResult').textContent = `❌ Erreur: ${result.error}`;
+            document.getElementById('analysisResult').textContent = ` Erreur: ${result.error}`;
             return;
         }
         
-        let resultText = `<strong>✅ Plateau reconnu!</strong><br>`;
+        let resultText = `<strong> Plateau reconnu!</strong><br>`;
         resultText += `Meilleur coup: <strong>Colonne ${result.bestMove}</strong><br>`;
         resultText += `Score: ${result.score}<br>`;
         resultText += `Prédiction: ${result.prediction}`;
@@ -709,6 +719,6 @@ async function analyzeImage() {
         document.getElementById('analysisResult').innerHTML = resultText;
     } catch (error) {
         console.error('Erreur analyse:', error);
-        document.getElementById('analysisResult').textContent = '❌ Erreur lors de l\'analyse';
+        document.getElementById('analysisResult').textContent = ' Erreur lors de l\'analyse';
     }
 }

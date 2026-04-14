@@ -36,6 +36,9 @@ public class GameSession {
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
+    @Column(name = "status", length = 20)
+    private String status = "EN_COURS";
+
     @Transient
     private int rows = 9;
     
@@ -50,11 +53,14 @@ public class GameSession {
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }
+        if (status == null) {
+            status = "EN_COURS";
+        }
     }
 
 
     public String getStatus() {
-        return (winner != null && winner > 0) ? "TERMINEE" : "EN_COURS";
+        return status != null ? status : ((winner != null && winner > 0) ? "TERMINEE" : "EN_COURS");
     }
 
     public boolean isGameOver() {

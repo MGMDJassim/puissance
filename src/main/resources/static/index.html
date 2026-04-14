@@ -14,9 +14,8 @@
     <div id="panel">
         <h1>PUISSANCE 4</h1>
         <div id="choix">        
-                <button id="jvjButton" onclick="choisirMode(event)">Jv/J</button>
-                <button id="jviaButton" onclick="choisirMode(event)">Jv/IA</button>
-                <button id="historyButton" onclick="showGameHistory()" style="background-color: #FF6B00;">📋 Historique</button>
+                <button id="jvjButton" onclick="choisirMode(event)">Jouer</button>
+                <button id="historyButton" onclick="showGameHistory()" style="background-color: #FF6B00;">Historique</button>
         </div>
 
         <div class="game-container" >
@@ -53,14 +52,7 @@
                     </div>
                 </div>
                 <div class="menu-section">
-                    <h4>💡 Suggestion IA</h4>
-                    <div id="suggestionBox" class="suggestion-box" style="padding:10px; background:#f0f0f0; border-radius:5px; text-align:center;">
-                        <p id="suggestionText" style="margin:5px 0; font-size:0.9em;">Calculez une suggestion...</p>
-                        <button onclick="loadSuggestion()" class="menu-btn" style="margin-top:5px;">📊 Obtenir conseil</button>
-                    </div>
-                </div>
-                <div class="menu-section">
-                    <h4>📈 Statistiques</h4>
+                    <h4>Statistiques</h4>
                     <div id="statsBox" class="stats-box" style="padding:10px; background:#f9f9f9; border-radius:5px; font-size:0.85em;">
                         <p id="statsTotalGames" style="margin:3px 0;">Total: <strong>-</strong></p>
                         <p id="statsHumanWins" style="margin:3px 0;">Humain: <strong>-</strong></p>
@@ -70,10 +62,10 @@
                     </div>
                 </div>
                 <div class="menu-section">
-                    <h4>🔍 Analyser Image</h4>
+                    <h4>Analyser Image</h4>
                     <div id="imageAnalysisBox" style="padding:10px; background:#f0f9ff; border-radius:5px; text-align:center;">
                         <input type="file" id="imageUpload" accept="image/*" style="margin-bottom:10px; font-size:0.8em;">
-                        <button onclick="analyzeImage()" class="menu-btn" style="margin-top:5px;">📸 Analyser</button>
+                        <button onclick="analyzeImage()" class="menu-btn" style="margin-top:5px;">Analyser</button>
                         <p id="analysisResult" style="margin:10px 0; font-size:0.85em; color:#333;">Uploadez une image...</p>
                     </div>
                 </div>
@@ -85,7 +77,7 @@
     <div id="historyModal" class="modal" style="display:none;">
         <div class="modal-content">
             <span class="close" onclick="closeGameHistory()">&times;</span>
-            <h2>📋 Historique des Parties</h2>
+            <h2>Historique des Parties</h2>
             <div id="historyList" class="history-list">
                 <p>Chargement...</p>
             </div>

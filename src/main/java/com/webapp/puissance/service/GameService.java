@@ -142,6 +142,7 @@ public class GameService {
         session.setNbCoups(currentGame.getMoveHistory() != null ? currentGame.getMoveHistory().size() : 0);
         session.setWinner(currentGame.getWinner() > 0 ? currentGame.getWinner() : 0);
         session.setMode(aiMode ? "HUMAN_VS_AI" : "HUMAN_VS_AI");
+        session.setStatus(currentGame.getWinner() > 0 ? "TERMINEE" : "EN_COURS");
         session.setCreatedAt(LocalDateTime.now());
         
         GameSession saved = gameSessionRepository.save(session);
@@ -167,11 +168,24 @@ public class GameService {
     }
 
     public void abandonGame() {
-        if (currentGameSessionId != null) {
-            GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
-            if (session != null && session.getWinner() == 0) {
-                gameSessionRepository.save(session);
+        try {
+            // Si la partie n'a pas encore été sauvegardée, la sauvegarder d'abord
+            if (currentGameSessionId == null && currentGame != null) {
+                saveCurrentGame();
             }
+            
+            // Ensuite, marquer comme abandonnée
+            if (currentGameSessionId != null) {
+                GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
+                if (session != null) {
+                    session.setStatus("ABANDONNEE");
+                    gameSessionRepository.save(session);
+                    System.out.println("Game " + currentGameSessionId + " marked as ABANDONNEE");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("Erreur lors de l'abandon: " + e.getMessage());
+            e.printStackTrace();
         }
     }
     
