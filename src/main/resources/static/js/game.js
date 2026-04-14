@@ -1,5 +1,6 @@
 let gameMode = null;
 let currentPlayer = 1;
+let playerColor = null; // Couleur choisie par le joueur humain
 let gameOver = false;
 let aiDifficulty = 3;
 let turnCount = 0;
@@ -11,8 +12,17 @@ async function choisirMode(event){
     
     if (mode === 'jvjButton') {
         gameMode = 'jvj';
-        await startNewGame();
+        // Afficher modal de choix de couleur
+        document.getElementById("colorModal").style.display = "flex";
+        document.getElementById("colorModal").style.justifyContent = "center";
+        document.getElementById("colorModal").style.alignItems = "center";
     }
+}
+
+function confirmColorChoice(color) {
+    playerColor = color;
+    document.getElementById("colorModal").style.display = "none";
+    startNewGame();
 }
 
 async function startNewGame() {
@@ -62,9 +72,22 @@ function updateStatusMessage() {
         statusDiv.textContent = `Partie terminée !`;
         statusDiv.style.color = "#10b981";
     } else {
-        const playerName = currentPlayer === 1 ? "Joueur 1 (Rouge)" : 
-                          (gameMode === 'jvia' && currentPlayer === 2) ? "IA (Jaune)" : "Joueur 2 (Jaune)";
-        statusDiv.textContent = `Au tour de : ${playerName}`;
+        // Adapter les noms des joueurs selon la couleur choisie
+        let player1Name = "Joueur 1";
+        let player2Name = "Joueur 2";
+        let player1Color = "Rouge";
+        let player2Color = "Jaune";
+        
+        // Si joueur choisit jaune, inverser les affichages
+        if (playerColor === 'yellow') {
+            player1Color = "Jaune";
+            player2Color = "Rouge";
+        }
+        
+        const playerName = currentPlayer === 1 ? `${player1Name} (${player1Color})` : 
+                          (gameMode === 'jvia' && currentPlayer === 2) ? `IA (${player2Color})` : `${player2Name} (${player2Color})`;
+        const colorEmoji = (currentPlayer === 1 && playerColor === 'yellow') || (currentPlayer === 2 && playerColor === 'red') ? "🟡" : "🔴";
+        statusDiv.textContent = `${colorEmoji} Au tour de : ${playerName}`;
         statusDiv.style.color = currentPlayer === 1 ? "#ef4444" : "#fbbf24";
         
         // Afficher la suggestion pour le joueur humain
@@ -155,10 +178,15 @@ function generateGameBoard(board, rows, cols){
             cellDiv.dataset.row = r;
             cellDiv.dataset.col = c;
             cellDiv.onclick = () => handleCellClick(c);
+            
+            // Swapper les couleurs si le joueur a choisi jaune
+            let playerClass = null;
             if (board[r][c] === 1) {
-                cellDiv.classList.add("player1");
+                playerClass = playerColor === 'yellow' ? 'player2' : 'player1';
+                cellDiv.classList.add(playerClass);
             } else if (board[r][c] === 2) {
-                cellDiv.classList.add("player2");
+                playerClass = playerColor === 'yellow' ? 'player1' : 'player2';
+                cellDiv.classList.add(playerClass);
             }
             rowDiv.appendChild(cellDiv);
         }
@@ -273,7 +301,7 @@ async function handleCellClick(column) {
         const gameData = await response.json();
 
         if (gameData.error || !response.ok) {
-            showGameMessage("❌ Colonne pleine ! Essayez une autre.", "error");
+            showGameMessage(" Colonne pleine ! Essayez une autre.", "error");
             isProcessing = false;
             return;
         }
@@ -286,8 +314,12 @@ async function handleCellClick(column) {
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
                 await fetch('/api/game/save', {method: 'POST'});
+                const winnerColor = playerColor === 'yellow' 
+                    ? (gameData.winner === 1 ? 'Jaune' : 'Rouge')
+                    : (gameData.winner === 1 ? 'Rouge' : 'Jaune');
+                const winnerName = gameData.winner === 1 ? 'Joueur 1' : 'Joueur 2';
                 setTimeout(() => {
-                    showGameMessage(`🎉 ${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'Joueur 2 (Jaune)'} a gagné !`, "success");
+                    showGameMessage(`🎉 ${winnerName} (${winnerColor}) a gagné !`, "success");
                 }, 100);
             } else {
                 await fetch('/api/game/save', {method: 'POST'});
@@ -327,13 +359,17 @@ async function playAIMove() {
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
                 await fetch('/api/game/save', {method: 'POST'});
+                const winnerColor = playerColor === 'yellow'
+                    ? (gameData.winner === 1 ? 'Jaune' : 'Rouge')
+                    : (gameData.winner === 1 ? 'Rouge' : 'Jaune');
+                const winnerName = gameData.winner === 1 ? 'Joueur' : 'IA';
                 setTimeout(() => {
-                    alert(`${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'IA (Jaune)'} a gagné !`);
+                    showGameMessage(`🎉 ${winnerName} (${winnerColor}) a gagné !`, "success");
                 }, 100);
             } else {
                 await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
-                    alert("Match nul !");
+                    showGameMessage("🤝 Match nul ! La grille est pleine.", "info");
                 }, 100);
             }
         }
@@ -362,16 +398,19 @@ async function resetGame() {
                 .catch(error => console.error('Erreur abandon:', error));
         }
         
-        const response = await fetch('/api/game/reset', {method: 'POST'});
-        const gameData = await response.json();
+        // Nettoyer les messages de victoire et autres
+        const gameMessage = document.getElementById("gameMessage");
+        if (gameMessage) gameMessage.remove();
         
-        turnCount = 0;
-        currentPlayer = gameData.currentPlayer;
-        gameOver = gameData.gameOver;
+        const suggestionDiv = document.getElementById("suggestionMessage");
+        if (suggestionDiv) suggestionDiv.remove();
         
-        afficherGameBoard(gameData);
-        updateStatusMessage();
-        updateGameInfo();
+        // Réinitialiser la couleur et afficher le modal
+        playerColor = null;
+        document.getElementById("colorModal").style.display = "flex";
+        document.getElementById("colorModal").style.justifyContent = "center";
+        document.getElementById("colorModal").style.alignItems = "center";
+        
     } catch (error) {
         console.error('Erreur lors de la réinitialisation:', error);
         if (gameMode === 'jvj') {
