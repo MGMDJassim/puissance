@@ -68,7 +68,6 @@ public class Game {
     private boolean checkWin(int r, int c) {
         int p = board[r][c];
         if (p == 0) return false;
-        // directions: horizontal, vertical, diag1, diag2
         int[][] dirs = { {0,1}, {1,0}, {1,1}, {1,-1} };
         for (int[] d : dirs) {
             int cnt = 1;
@@ -129,7 +128,6 @@ public class Game {
 
     public int getWinner() { return gameOver ? currentPlayer : 0; }
 
-    // Static helpers to simulate on a board copy
     public static int dropOnBoard(int[][] board, int col, int player) {
         int rows = board.length;
         int cols = board[0].length;

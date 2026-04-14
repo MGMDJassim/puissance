@@ -3,7 +3,7 @@ let currentPlayer = 1;
 let gameOver = false;
 let aiDifficulty = 3;
 let turnCount = 0;
-let isProcessing = false; // Empêche les clics multiples
+let isProcessing = false;
 
 
 async function choisirMode(event){
@@ -123,13 +123,12 @@ async function handleCellClick(column) {
         return;
     }
 
-    isProcessing = true; // Verrouiller les clics
+    isProcessing = true;
     
     try {
         const response = await fetch(`/api/game/move?column=${column}`, {method: 'POST'});
         const gameData = await response.json();
 
-        // Vérifier si la réponse contient une erreur
         if (gameData.error || !response.ok) {
             alert(gameData.error || "Impossible de jouer ce coup. Colonne pleine ?");
             isProcessing = false;
@@ -143,10 +142,12 @@ async function handleCellClick(column) {
 
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
+                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     alert(`${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'Joueur 2 (Jaune)'} a gagné !`);
                 }, 100);
             } else {
+                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     alert("Match nul !");
                 }, 100);
@@ -162,7 +163,7 @@ async function handleCellClick(column) {
         console.error("Erreur lors du coup:", error);
         alert("Impossible de jouer ce coup. Colonne pleine ?");
     } finally {
-        isProcessing = false; // Déverrouiller les clics
+        isProcessing = false;
     }
 }
 
@@ -182,10 +183,12 @@ async function playAIMove() {
 
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
+                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     alert(`${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'IA (Jaune)'} a gagné !`);
                 }, 100);
             } else {
+                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     alert("Match nul !");
                 }, 100);
@@ -354,4 +357,195 @@ function updateGameInfo() {
     document.getElementById('currentMode').textContent = modeText;
     document.getElementById('currentDifficulty').textContent = getDifficultyName(aiDifficulty);
     document.getElementById('turnCount').textContent = turnCount;
+}
+
+async function showGameHistory() {
+    const modal = document.getElementById('historyModal');
+    const historyList = document.getElementById('historyList');
+    
+    modal.style.display = 'flex';
+    historyList.innerHTML = '<p class="empty-message">📥 Chargement des parties...</p>';
+    
+    try {
+        const response = await fetch('/api/game/history');
+        const data = await response.json();
+        
+        console.log('API Response:', data);
+        console.log('Games:', data.games);
+        
+        if (!data.games || data.games.length === 0) {
+            historyList.innerHTML = '<p class="empty-message">❌ Aucune partie enregistrée</p>';
+            return;
+        }
+        
+        let html = '';
+        data.games.forEach(game => {
+            const createdAt = formatDate(game.createdAt);
+            const statusLabel = getStatusLabel(game.status);
+            const statusClass = game.status;
+            
+            html += `
+                <div class="game-item">
+                    <div class="game-item-header">
+                        <span class="game-item-id">Game #${game.id}</span>
+                        <span class="game-item-status ${statusClass}">${statusLabel}</span>
+                    </div>
+                    <div class="game-item-details">
+                        <p><strong>📅 Date:</strong> ${createdAt}</p>
+                        <p><strong>📏 Grille:</strong> ${game.rows}x${game.cols}</p>
+                        <p><strong>🎮 Joueur actuel:</strong> Joueur ${game.currentPlayer}</p>
+                    </div>
+                    <div class="game-item-actions">
+                        <button class="btn-replay" onclick="replayGame(${game.id})">▶️ Rejouer</button>
+                        <button class="btn-delete" onclick="deleteGame(${game.id})">🗑️ Supprimer</button>
+                    </div>
+                </div>
+            `;
+        });
+        
+        historyList.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Erreur lors du chargement de l\'historique:', error);
+        historyList.innerHTML = '<p class="empty-message">⚠️ Erreur de chargement</p>';
+    }
+}
+
+function closeGameHistory() {
+    document.getElementById('historyModal').style.display = 'none';
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${day}/${month}/${year} ${hours}:${minutes}`;
+}
+
+function getStatusLabel(status) {
+    const statusMap = {
+        'EN_COURS': '⏳ En cours',
+        'TERMINEE': '✅ Terminée',
+        'ABANDONNEE': '❌ Abandonnée'
+    };
+    return statusMap[status] || status;
+}
+
+async function replayGame(gameId) {
+    try {
+        const response = await fetch(`/api/game/load/${gameId}`);
+        const gameData = await response.json();
+        
+        console.log('Game Data:', gameData);
+        console.log('Sequence:', gameData.sequence);
+        
+        closeGameHistory();
+        
+        document.getElementById("choix").style.display = "none";
+        document.querySelector(".game-container").style.display = "flex";
+        
+        currentPlayer = 1;
+        gameOver = false;
+        turnCount = 0;
+        gameMode = 'replay';
+        
+        const newGame = {
+            board: [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0]
+            ],
+            rows: 9,
+            cols: 9,
+            currentPlayer: 1,
+            gameOver: false
+        };
+        
+        if (gameData.sequence) {
+            console.log('Raw sequence:', gameData.sequence);
+            
+            const moves = gameData.sequence.split('').filter(m => m.trim());
+            
+            console.log('Parsed moves:', moves);
+            
+            for (const move of moves) {
+                try {
+                    const col = parseInt(move.trim());
+                    console.log('Playing move:', col);
+                    
+                    if (col >= 0 && col < 9) {
+                        for (let r = 8; r >= 0; r--) {
+                            if (newGame.board[r][col] === 0) {
+                                newGame.board[r][col] = newGame.currentPlayer;
+                                console.log(`Placed player ${newGame.currentPlayer} at [${r},${col}]`);
+                                break;
+                            }
+                        }
+                        newGame.currentPlayer = newGame.currentPlayer === 1 ? 2 : 1;
+                        turnCount++;
+                    }
+                } catch (e) {
+                    console.error('Erreur lors du parsing du mouvement:', move, e);
+                }
+            }
+        }
+        
+        console.log('Final board:', newGame.board);
+        console.log('Total moves:', turnCount);
+        
+        afficherGameBoard(newGame);
+        updateStatusMessage();
+        updateGameInfo();
+        
+        const buttonGroup = document.querySelector('.button-group');
+        if (buttonGroup) {
+            buttonGroup.style.opacity = '0.5';
+            const buttons = buttonGroup.querySelectorAll('button');
+            buttons.forEach(btn => btn.disabled = true);
+        }
+        
+        alert(`🎬 Replay de la partie #${gameId} - ${turnCount} coups joués`);
+        
+    } catch (error) {
+        console.error('Erreur lors du chargement de la partie:', error);
+        alert('⚠️ Erreur lors du chargement de la partie: ' + error.message);
+    }
+}
+
+async function deleteGame(gameId) {
+    if (!confirm('🗑️ Êtes-vous sûr de vouloir supprimer cette partie ?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/game/delete/${gameId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            alert('✅ Partie supprimée avec succès');
+            showGameHistory();
+        } else {
+            alert('⚠️ Erreur lors de la suppression');
+        }
+    } catch (error) {
+        console.error('Erreur lors de la suppression:', error);
+        alert('⚠️ Erreur lors de la suppression');
+    }
+}
+
+window.onclick = function(event) {
+    const modal = document.getElementById('historyModal');
+    if (event.target === modal) {
+        modal.style.display = 'none';
+    }
 }

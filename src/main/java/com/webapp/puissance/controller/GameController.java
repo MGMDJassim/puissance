@@ -2,11 +2,13 @@ package com.webapp.puissance.controller;
 
 import com.webapp.puissance.model.Game;
 import com.webapp.puissance.service.GameService;
+import com.webapp.puissance.entity.GameSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -149,6 +151,132 @@ public class GameController {
         Map<String, Object> response = new HashMap<>();
         response.put("columnScores", scores);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Sauvegarder la partie actuelle en base de données
+     * POST /api/game/save
+     * @return JSON avec l'ID et les details de la partie sauvegardée
+     */
+    @PostMapping("/save")
+    public ResponseEntity<Map<String, Object>> saveGame() {
+        try {
+            GameSession session = gameService.saveCurrentGame();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("gameSessionId", session.getId());
+            response.put("status", session.getStatus());
+            response.put("message", "Partie sauvegardée avec succès !");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            System.err.println("Error saving game: " + e.getMessage());
+            e.printStackTrace();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Erreur lors de la sauvegarde: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Charger une partie depuis la base de données
+     * GET /api/game/load/{id}
+     * @param id l'ID de la partie
+     * @return JSON avec les details de la partie
+     */
+    @GetMapping("/load/{id}")
+    public ResponseEntity<Map<String, Object>> loadGame(@PathVariable Long id) {
+        GameSession session = gameService.loadGame(id);
+        if (session == null) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("id", session.getId());
+        response.put("rows", 9);
+        response.put("cols", 9);
+        response.put("currentPlayer", 1);
+        response.put("gameOver", session.isGameOver());
+        response.put("status", session.getStatus());
+        response.put("sequence", session.getSequence());
+        response.put("nbCoups", session.getNbCoups());
+        response.put("winner", session.getWinner());
+        response.put("mode", session.getMode());
+        response.put("createdAt", session.getCreatedAt());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Récupérer l'historique de toutes les parties
+     * GET /api/game/history
+     * @return JSON avec la liste des parties sauvegardées
+     */
+    @GetMapping("/history")
+    public ResponseEntity<Map<String, Object>> getGameHistory() {
+        List<GameSession> sessions = gameService.getAllGameSessions();
+        Map<String, Object> response = new HashMap<>();
+        response.put("totalGames", sessions.size());
+        response.put("games", sessions);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Récupérer les parties en cours
+     * GET /api/game/sessions/ongoing
+     * @return JSON avec les parties en cours
+     */
+    @GetMapping("/sessions/ongoing")
+    public ResponseEntity<Map<String, Object>> getOngoingGames() {
+        List<GameSession> sessions = gameService.getOngoingGames();
+        Map<String, Object> response = new HashMap<>();
+        response.put("ongoingCount", sessions.size());
+        response.put("sessions", sessions);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Abandonner la partie actuelle
+     * POST /api/game/abandon
+     * @return confirmation
+     */
+    @PostMapping("/abandon")
+    public ResponseEntity<Map<String, Object>> abandonGame() {
+        gameService.abandonGame();
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Partie abandonnée !");
+        return ResponseEntity.ok(response);
+    }
+    
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<Map<String, Object>> deleteGame(@PathVariable Long id) {
+        try {
+            gameService.deleteGameSession(id);
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Partie supprimée avec succès");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Erreur lors de la suppression: " + e.getMessage());
+            return ResponseEntity.status(404).body(response);
+        }
+    }
+    
+    @GetMapping("/debug/check-modes")
+    public ResponseEntity<Map<String, Object>> checkExistingModes() {
+        try {
+            List<String> modes = gameService.getDistinctModes();
+            Map<String, Object> response = new HashMap<>();
+            response.put("distinctModes", modes);
+            response.put("count", modes.size());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
     }
     
     /**

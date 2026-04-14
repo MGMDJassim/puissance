@@ -2,26 +2,26 @@ package com.webapp.puissance.service;
 
 import com.webapp.puissance.model.Game;
 import com.webapp.puissance.model.MinimaxAI;
+import com.webapp.puissance.entity.GameSession;
+import com.webapp.puissance.repository.GameSessionRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-/**
- * Service pour gérer la partie de Puissance 4
- * Version simple sans base de données
- */
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Service
 public class GameService {
     
-    // Partie unique en mémoire
     private Game currentGame;
-    
-    // Mode de jeu : true = contre IA, false = humain vs humain
     private boolean aiMode = false;
-    
-    // Niveau de difficulté de l'IA (1=Facile, 3=Moyen, 5=Difficile)
     private int aiDifficulty = 3;
+    private Long currentGameSessionId = null;
+    
+    @Autowired
+    private GameSessionRepository gameSessionRepository;
     
     public GameService() {
-        // Initialiser une partie par défaut
         this.currentGame = new Game();
     }
     
@@ -48,33 +48,19 @@ public class GameService {
         return currentGame;
     }
     
-    /**
-     * Récupérer la partie courante
-     * @return la partie en cours
-     */
     public Game getCurrentGame() {
         return currentGame;
     }
     
-    /**
-     * Jouer un coup dans la partie
-     * @param column la colonne où jouer (0-8)
-     * @return la ligne où le jeton est tombé, ou -1 si invalide
-     */
     public int playMove(int column) {
         return currentGame.drop(column);
     }
     
-    /**
-     * L'IA joue automatiquement son coup
-     * @return la ligne où le jeton de l'IA est tombé, ou -1 si invalide
-     */
     public int playAIMove() {
         if (currentGame.isGameOver()) {
             return -1;
         }
         
-        // L'IA joue toujours en tant que joueur 2
         int aiPlayer = 2;
         
         if (currentGame.getCurrentPlayer() != aiPlayer) {
@@ -91,42 +77,91 @@ public class GameService {
         return currentGame.drop(column);
     }
     
-    /**
-     * Obtenir les scores de chaque colonne selon l'IA (pour debug/UI)
-     * @return tableau des scores par colonne
-     */
     public int[] getAIColumnScores() {
         MinimaxAI ai = new MinimaxAI(2, aiDifficulty);
         return ai.columnScores(currentGame);
     }
     
-    /**
-     * Réinitialiser la partie
-     */
+
     public void resetGame() {
         currentGame.reset();
     }
-    
-    /**
-     * Annuler le dernier coup
-     */
+
     public void undoMove() {
         currentGame.undo();
     }
     
-
-    
-    /**
-     * Vérifier si le mode IA est activé
-     */
     public boolean isAIMode() {
         return aiMode;
     }
     
-    /**
-     * Obtenir le niveau de difficulté actuel
-     */
     public int getAIDifficulty() {
         return aiDifficulty;
+    }
+
+    public GameSession saveCurrentGame() {
+        System.out.println("=== SAVING GAME ===");
+        
+        if (currentGame == null) {
+            System.err.println("ERROR: currentGame is null!");
+            throw new RuntimeException("Aucune partie en cours pour sauvegarder");
+        }
+        
+        System.out.println("Current game moves: " + currentGame.getMoveHistory());
+        System.out.println("Game over: " + currentGame.isGameOver());
+        System.out.println("Winner: " + currentGame.getWinner());
+        System.out.println("AI Mode: " + aiMode);
+        
+        GameSession session = new GameSession();
+        String sequence = "";
+        if (currentGame.getMoveHistory() != null) {
+            for (Integer move : currentGame.getMoveHistory()) {
+                sequence += move;
+            }
+        }
+        
+        session.setSequence(sequence.isEmpty() ? "0" : sequence);
+        session.setNbCoups(currentGame.getMoveHistory() != null ? currentGame.getMoveHistory().size() : 0);
+        session.setWinner(currentGame.getWinner() > 0 ? currentGame.getWinner() : 0);
+        session.setMode(aiMode ? "HUMAN_VS_AI" : "HUMAN_VS_AI");
+        session.setCreatedAt(LocalDateTime.now());
+        
+        GameSession saved = gameSessionRepository.save(session);
+        currentGameSessionId = saved.getId();
+        
+        System.out.println("Game saved with ID: " + saved.getId());
+        System.out.println("Sequence: " + sequence);
+        System.out.println("=== END SAVING ===");
+        
+        return saved;
+    }
+
+    public GameSession loadGame(Long gameId) {
+        return gameSessionRepository.findById(gameId).orElse(null);
+    }
+
+    public List<GameSession> getAllGameSessions() {
+        return gameSessionRepository.findAllByOrderByCreatedAtDesc();
+    }
+
+    public List<GameSession> getOngoingGames() {
+        return gameSessionRepository.findOngoingGames();
+    }
+
+    public void abandonGame() {
+        if (currentGameSessionId != null) {
+            GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
+            if (session != null && session.getWinner() == 0) {
+                gameSessionRepository.save(session);
+            }
+        }
+    }
+    
+    public void deleteGameSession(Long gameId) {
+        gameSessionRepository.deleteById(gameId);
+    }
+    
+    public List<String> getDistinctModes() {
+        return gameSessionRepository.findDistinctModes();
     }
 }
