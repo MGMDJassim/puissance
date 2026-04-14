@@ -529,6 +529,18 @@ button:active {
     }
 }
 
+/* Animation pour les messages de jeu */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Petits smartphones (max 480px) */
 @media screen and (max-width: 480px) {
     h1 {

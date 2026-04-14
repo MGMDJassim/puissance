@@ -224,6 +224,33 @@ async function displayScores() {
     }
 }
 
+function showGameMessage(message, type = 'info') {
+    let messageDiv = document.getElementById("gameMessage");
+    if (!messageDiv) {
+        messageDiv = document.createElement("div");
+        messageDiv.id = "gameMessage";
+        document.querySelector(".grille").appendChild(messageDiv);
+    }
+    
+    let bgcolor = '#3b82f6'; // info (bleu)
+    if (type === 'error') bgcolor = '#ef4444';      // rouge
+    if (type === 'success') bgcolor = '#10b981';    // vert
+    if (type === 'warning') bgcolor = '#f59e0b';    // orange
+    
+    messageDiv.style.cssText = `
+        margin-top: 15px;
+        padding: 12px;
+        background: ${bgcolor};
+        color: white;
+        border-radius: 8px;
+        font-weight: bold;
+        text-align: center;
+        font-size: 16px;
+        animation: slideIn 0.3s ease;
+    `;
+    messageDiv.textContent = message;
+}
+
 async function handleCellClick(column) {
     // Bloquer les clics si une action est déjà en cours
     if (isProcessing) {
@@ -231,7 +258,7 @@ async function handleCellClick(column) {
     }
     
     if (gameOver) {
-        alert("La partie est terminée ! Cliquez sur 'Recommencer' pour une nouvelle partie.");
+        showGameMessage("🎮 Appuyez sur 'Recommencer' pour une nouvelle partie", "warning");
         return;
     }
 
@@ -246,7 +273,7 @@ async function handleCellClick(column) {
         const gameData = await response.json();
 
         if (gameData.error || !response.ok) {
-            alert(gameData.error || "Impossible de jouer ce coup. Colonne pleine ?");
+            showGameMessage("❌ Colonne pleine ! Essayez une autre.", "error");
             isProcessing = false;
             return;
         }
@@ -260,12 +287,12 @@ async function handleCellClick(column) {
             if (gameData.winner > 0) {
                 await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
-                    alert(`${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'Joueur 2 (Jaune)'} a gagné !`);
+                    showGameMessage(`🎉 ${gameData.winner === 1 ? 'Joueur 1 (Rouge)' : 'Joueur 2 (Jaune)'} a gagné !`, "success");
                 }, 100);
             } else {
                 await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
-                    alert("Match nul !");
+                    showGameMessage("🤝 Match nul ! La grille est pleine.", "info");
                 }, 100);
             }
             return;
@@ -277,7 +304,7 @@ async function handleCellClick(column) {
         }
     } catch (error) {
         console.error("Erreur lors du coup:", error);
-        alert("Impossible de jouer ce coup. Colonne pleine ?");
+        showGameMessage("❌ Erreur : Colonne pleine ?", "error");
     } finally {
         isProcessing = false;
     }
