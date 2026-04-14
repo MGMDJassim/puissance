@@ -384,20 +384,28 @@ async function resetGame() {
     }
 }
 
-function goBack() {
-    // Marquer la partie comme abandonnée si elle n'est pas terminée
-    if (!gameOver) {
-        fetch('/api/game/abandon', {method: 'POST'})
-            .then(response => response.json())
+async function goBack() {
+    isProcessing = true;
+    try {
+        // Sauvegarder la partie avant de l'abandonner (même si pas terminée)
+        if (!gameOver && currentGame) {
+            await fetch('/api/game/save', {method: 'POST'})
+                .catch(error => console.error('Erreur save:', error));
+        }
+        
+        // Marquer la partie comme abandonnée
+        await fetch('/api/game/abandon', {method: 'POST'})
             .catch(error => console.error('Erreur abandon:', error));
+    } catch (error) {
+        console.error('Erreur goBack:', error);
+    } finally {
+        document.querySelector(".game-container").style.display = "none";
+        document.getElementById("choix").style.display = "flex";
+        gameMode = null;
+        gameOver = false;
+        turnCount = 0;
+        isProcessing = false;
     }
-    
-    document.querySelector(".game-container").style.display = "none";
-    document.getElementById("choix").style.display = "flex";
-    gameMode = null;
-    gameOver = false;
-    turnCount = 0;
-    isProcessing = false;
 }
 
 async function undoMove() {

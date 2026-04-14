@@ -141,7 +141,7 @@ public class GameService {
         session.setSequence(sequence.isEmpty() ? "0" : sequence);
         session.setNbCoups(currentGame.getMoveHistory() != null ? currentGame.getMoveHistory().size() : 0);
         session.setWinner(currentGame.getWinner() > 0 ? currentGame.getWinner() : 0);
-        session.setMode(aiMode ? "HUMAN_VS_AI" : "HUMAN_VS_AI");
+        session.setMode(aiMode ? "HUMAN_VS_AI" : "HUMAN_VS_HUMAN");
         session.setStatus(currentGame.getWinner() > 0 ? "TERMINEE" : "EN_COURS");
         session.setCreatedAt(LocalDateTime.now());
         
@@ -169,18 +169,21 @@ public class GameService {
 
     public void abandonGame() {
         try {
-            // Si la partie n'a pas encore été sauvegardée, la sauvegarder d'abord
-            if (currentGameSessionId == null && currentGame != null) {
-                saveCurrentGame();
-            }
-            
-            // Ensuite, marquer comme abandonnée
-            if (currentGameSessionId != null) {
-                GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
-                if (session != null) {
-                    session.setStatus("ABANDONNEE");
-                    gameSessionRepository.save(session);
-                    System.out.println("Game " + currentGameSessionId + " marked as ABANDONNEE");
+            // Toujours sauvegarder la partie avant de l'abandonner
+            if (currentGame != null && currentGame.getMoveHistory() != null && !currentGame.getMoveHistory().isEmpty()) {
+                if (currentGameSessionId == null) {
+                    // Partie n'a jamais été sauvegardée
+                    saveCurrentGame();
+                }
+                
+                // Marquer comme abandonnée
+                if (currentGameSessionId != null) {
+                    GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
+                    if (session != null) {
+                        session.setStatus("ABANDONNEE");
+                        gameSessionRepository.save(session);
+                        System.out.println("Game " + currentGameSessionId + " marked as ABANDONNEE");
+                    }
                 }
             }
         } catch (Exception e) {
