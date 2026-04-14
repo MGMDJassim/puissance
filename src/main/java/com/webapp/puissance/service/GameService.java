@@ -169,17 +169,16 @@ public class GameService {
 
     public void abandonGame() {
         try {
-            // Toujours sauvegarder la partie avant de l'abandonner
+            // Sauvegarder la partie avant de l'abandonner
             if (currentGame != null && currentGame.getMoveHistory() != null && !currentGame.getMoveHistory().isEmpty()) {
                 if (currentGameSessionId == null) {
-                    // Partie n'a jamais été sauvegardée
                     saveCurrentGame();
                 }
                 
-                // Marquer comme abandonnée
+                // Marquer comme abandonnée SEULEMENT si pas déjà terminée
                 if (currentGameSessionId != null) {
                     GameSession session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
-                    if (session != null) {
+                    if (session != null && !"TERMINEE".equals(session.getStatus())) {
                         session.setStatus("ABANDONNEE");
                         gameSessionRepository.save(session);
                         System.out.println("Game " + currentGameSessionId + " marked as ABANDONNEE");

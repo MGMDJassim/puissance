@@ -387,15 +387,17 @@ async function resetGame() {
 async function goBack() {
     isProcessing = true;
     try {
-        // Sauvegarder la partie avant de l'abandonner (même si pas terminée)
+        // Sauvegarder la partie avant de l'abandonner
         if (!gameOver && currentGame) {
             await fetch('/api/game/save', {method: 'POST'})
                 .catch(error => console.error('Erreur save:', error));
         }
         
-        // Marquer la partie comme abandonnée
-        await fetch('/api/game/abandon', {method: 'POST'})
-            .catch(error => console.error('Erreur abandon:', error));
+        // Marquer comme abandonnée SEULEMENT si pas terminée
+        if (!gameOver) {
+            await fetch('/api/game/abandon', {method: 'POST'})
+                .catch(error => console.error('Erreur abandon:', error));
+        }
     } catch (error) {
         console.error('Erreur goBack:', error);
     } finally {
