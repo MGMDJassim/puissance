@@ -15,40 +15,50 @@ public class MinimaxAI {
 
     public int chooseColumn(Game game) {
         int[][] board = game.getBoardCopy();
-        List<Integer> bestCols = new ArrayList<>();
+        int bestCol = -1;
         int bestScore = Integer.MIN_VALUE;
-        List<Integer> immediateWins = new ArrayList<>();
+        
+        // Check if we can win immediately
         for (int c = 0; c < game.getCols(); c++) {
             int[][] copy = copyBoard(board);
             int r = Game.dropOnBoard(copy, c, me);
             if (r == -1) continue;
             if (Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
-                immediateWins.add(c);
-                continue;
+                return c; // Win immediately!
             }
-            int score = minimax(copy, game.getWinLength(), 1, false, 3 - me);
+        }
+        
+        // Check if we need to block opponent's win
+        int opponent = 3 - me;
+        for (int c = 0; c < game.getCols(); c++) {
+            int[][] copy = copyBoard(board);
+            int r = Game.dropOnBoard(copy, c, opponent);
+            if (r != -1 && Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
+                return c; // Block opponent's win!
+            }
+        }
+        
+        // Otherwise, find best move using minimax
+        for (int c = 0; c < game.getCols(); c++) {
+            int[][] copy = copyBoard(board);
+            int r = Game.dropOnBoard(copy, c, me);
+            if (r == -1) continue;
+            
+            int score = minimax(copy, game.getWinLength(), 1, false, opponent);
             if (score > bestScore) {
                 bestScore = score;
-                bestCols.clear();
-                bestCols.add(c);
-            } else if (score == bestScore) {
-                bestCols.add(c);
+                bestCol = c;
             }
         }
-
-        if (!immediateWins.isEmpty()) {
-            int idx = ThreadLocalRandom.current().nextInt(immediateWins.size());
-            return immediateWins.get(idx);
+        
+        return bestCol == -1 ? getFirstValidColumn(board) : bestCol;
+    }
+    
+    private int getFirstValidColumn(int[][] board) {
+        for (int c = 0; c < board[0].length; c++) {
+            if (board[0][c] == 0) return c;
         }
-
-        if (bestCols.isEmpty()) {
-            // fallback: first non-full column
-            for (int c = 0; c < game.getCols(); c++) if (game.getCell(0, c) == 0) return c;
-            return -1;
-        }
-
-        int idx = ThreadLocalRandom.current().nextInt(bestCols.size());
-        return bestCols.get(idx);
+        return -1;
     }
 
     // Return score for every column (Integer.MIN_VALUE for invalid/full columns)
@@ -56,6 +66,8 @@ public class MinimaxAI {
         int cols = game.getCols();
         int[][] board = game.getBoardCopy();
         int[] scores = new int[cols];
+        int opponent = 3 - me;
+        
         for (int c = 0; c < cols; c++) {
             int[][] copy = copyBoard(board);
             int r = Game.dropOnBoard(copy, c, me);
@@ -63,11 +75,22 @@ public class MinimaxAI {
                 scores[c] = Integer.MIN_VALUE;
                 continue;
             }
+            
+            // Check immediate win
             if (Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
-                scores[c] = 100000; // very high for immediate win
+                scores[c] = 100000;
                 continue;
             }
-            scores[c] = minimax(copy, game.getWinLength(), 1, false, 3 - me);
+            
+            // Check if we need to block
+            int[][] copy2 = copyBoard(board);
+            int r2 = Game.dropOnBoard(copy2, c, opponent);
+            if (r2 != -1 && Game.checkWinOnBoard(copy2, r2, c, game.getWinLength())) {
+                scores[c] = 50000; // High priority blocking move
+                continue;
+            }
+            
+            scores[c] = minimax(copy, game.getWinLength(), 1, false, opponent);
         }
         return scores;
     }
@@ -105,17 +128,42 @@ public class MinimaxAI {
         int score = 0;
         int rows = board.length;
         int cols = board[0].length;
-        for (int r = 0; r < rows; r++) for (int c = 0; c < cols; c++) {
-            int p = board[r][c];
-            if (p == 0) continue;
-            if (Game.checkWinOnBoard(board, r, c, winLength)) {
-                if (p == me) return 1000;
-                else return -1000;
+        
+        // Check all positions for winning threats
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                int p = board[r][c];
+                if (p == 0) continue;
+                
+                // Check if position is part of a winning line
+                if (Game.checkWinOnBoard(board, r, c, winLength)) {
+                    if (p == me) return 10000;  // Our win detected
+                    else return -10000;          // Opponent win detected
+                }
             }
-            // small heuristic: favor center columns
-            if (p == me) score += (cols/2 - Math.abs(c - cols/2));
-            else score -= (cols/2 - Math.abs(c - cols/2));
         }
+        
+        // Heuristic: count potential sequences
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                int p = board[r][c];
+                if (p == 0) continue;
+                
+                // Favor center columns
+                int centerDist = Math.abs(c - cols / 2);
+                int centerBonus = (cols / 2) - centerDist;
+                
+                if (p == me) {
+                    score += centerBonus;
+                    // Bonus for middle position
+                    if (c >= cols / 3 && c < 2 * cols / 3) score += 10;
+                } else {
+                    score -= centerBonus;
+                    if (c >= cols / 3 && c < 2 * cols / 3) score -= 10;
+                }
+            }
+        }
+        
         return score;
     }
 

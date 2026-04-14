@@ -52,6 +52,31 @@
                         <p><strong>Tour:</strong> <span id="turnCount">0</span></p>
                     </div>
                 </div>
+                <div class="menu-section">
+                    <h4>💡 Suggestion IA</h4>
+                    <div id="suggestionBox" class="suggestion-box" style="padding:10px; background:#f0f0f0; border-radius:5px; text-align:center;">
+                        <p id="suggestionText" style="margin:5px 0; font-size:0.9em;">Calculez une suggestion...</p>
+                        <button onclick="loadSuggestion()" class="menu-btn" style="margin-top:5px;">📊 Obtenir conseil</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h4>📈 Statistiques</h4>
+                    <div id="statsBox" class="stats-box" style="padding:10px; background:#f9f9f9; border-radius:5px; font-size:0.85em;">
+                        <p id="statsTotalGames" style="margin:3px 0;">Total: <strong>-</strong></p>
+                        <p id="statsHumanWins" style="margin:3px 0;">Humain: <strong>-</strong></p>
+                        <p id="statsAiWins" style="margin:3px 0;">IA: <strong>-</strong></p>
+                        <p id="statsDraws" style="margin:3px 0;">Nuls: <strong>-</strong></p>
+                        <button onclick="loadStats()" class="menu-btn" style="margin-top:5px;">🔄 Actualiser</button>
+                    </div>
+                </div>
+                <div class="menu-section">
+                    <h4>🔍 Analyser Image</h4>
+                    <div id="imageAnalysisBox" style="padding:10px; background:#f0f9ff; border-radius:5px; text-align:center;">
+                        <input type="file" id="imageUpload" accept="image/*" style="margin-bottom:10px; font-size:0.8em;">
+                        <button onclick="analyzeImage()" class="menu-btn" style="margin-top:5px;">📸 Analyser</button>
+                        <p id="analysisResult" style="margin:10px 0; font-size:0.85em; color:#333;">Uploadez une image...</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

@@ -6,6 +6,7 @@ import com.webapp.puissance.entity.GameSession;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.HashMap;
 import java.util.List;
@@ -274,6 +275,92 @@ public class GameController {
             response.put("error", e.getMessage());
             return ResponseEntity.status(500).body(response);
         }
+    }
+
+    /**
+     * Obtenir le meilleur coup suggéré avec prédiction
+     * GET /api/game/suggest
+     * @return JSON avec colonne suggérée, score, et prédiction (victoire/défaite/nul/incertaine)
+     */
+    @GetMapping("/suggest")
+    public ResponseEntity<Map<String, Object>> suggestMove() {
+        try {
+            Map<String, Object> suggestion = gameService.getSuggestedMove();
+            return ResponseEntity.ok(suggestion);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "Erreur lors du calcul de suggestion: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Obtenir les statistiques des parties
+     * GET /api/game/stats
+     * @return JSON avec stats : total parties, victoires humain/IA, taux victoires
+     */
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getStats() {
+        try {
+            Map<String, Object> stats = gameService.getGameStats();
+            return ResponseEntity.ok(stats);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "Erreur lors du calcul des statistiques: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+
+    /**
+     * Analyser une image du plateau Puissance 4
+     * POST /api/game/analyze-image (multipart/form-data)
+     * @return JSON avec meilleur coup et analyse
+     */
+    @PostMapping("/analyze-image")
+    public ResponseEntity<Map<String, Object>> analyzeImage(
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        try {
+            Map<String, Object> result = gameService.analyzeGameImage(file);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("error", "Erreur lors de l'analyse: " + e.getMessage());
+            return ResponseEntity.status(400).body(response);
+        }
+    }
+    
+    /**
+     * Changer le type d'IA utilisée
+     * POST /api/game/set-ai-type?type=1
+     * @param type 1 = Minimax, 2 = DBBased (base de données)
+     * @return confirmation
+     */
+    @PostMapping("/set-ai-type")
+    public ResponseEntity<Map<String, Object>> setAIType(
+            @RequestParam(defaultValue = "1") int type) {
+        if (type != 1 && type != 2) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Type d'IA invalide. Utilisez 1=Minimax ou 2=DBBased"));
+        }
+        
+        gameService.setAIType(type);
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("aiType", type);
+        response.put("aiTypeName", type == 1 ? "Minimax" : "DBBased");
+        response.put("message", type == 1 ? "IA Minimax activée" : "IA guidée par base de données activée");
+        return ResponseEntity.ok(response);
+    }
+    
+    /**
+     * Obtenir le type d'IA actuel et les infos
+     * GET /api/game/ai-info
+     * @return infos sur l'IA courante
+     */
+    @GetMapping("/ai-info")
+    public ResponseEntity<Map<String, Object>> getAIInfo() {
+        Map<String, Object> info = gameService.getAIInfo();
+        return ResponseEntity.ok(info);
     }
     
     /**

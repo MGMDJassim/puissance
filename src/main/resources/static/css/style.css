@@ -96,7 +96,8 @@ h1 {
         #2A2A2A 8px,
         #2A2A2A 16px
     );
-    padding: 10px;
+    padding: 0;
+    margin: 0;
     margin-bottom: 20px;
     box-shadow: 0 8px 0 #000, 0 10px 20px rgba(0,0,0,0.8);
     image-rendering: pixelated;
@@ -111,12 +112,15 @@ h1 {
 
 .row {
     display: flex;
+    gap: 4px;
+    margin: 0;
+    padding: 0;
 }
 
 .cell {
     width: 56px;
     height: 56px;
-    margin: 4px;
+    margin: 0;
     border: 4px solid #000;
     background: repeating-linear-gradient(
         45deg,
@@ -133,6 +137,7 @@ h1 {
     box-shadow: inset 2px 2px 4px rgba(0,0,0,0.8);
     image-rendering: pixelated;
     position: relative;
+    box-sizing: border-box;
 }
 
 .cell:hover {
@@ -178,6 +183,39 @@ h1 {
                 inset -2px -2px 0 rgba(0,0,0,0.3),
                 0 4px 0 #B8860B;
     border-color: #B8860B;
+}
+
+/* Score display row */
+.scores-row {
+    display: flex;
+    gap: 4px;
+    margin: 0 0 10px 0;
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+.score-cell {
+    width: 56px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 4px solid #666;
+    font-size: 12px;
+    font-weight: bold;
+    color: #000;
+    background: #CCCCCC;
+    transition: all 0.3s ease;
+    box-sizing: border-box;
+    image-rendering: pixelated;
+}
+
+.score-cell:hover {
+    transform: scale(1.05);
+    border-color: #FFD700;
 }
 
 button {
@@ -367,7 +405,9 @@ button:active {
     .cell {
         width: 48px;
         height: 48px;
-        margin: 3px;
+        margin: 0;
+        border: 3px solid #000;
+        box-sizing: border-box;
     }
     
     button {
@@ -423,15 +463,17 @@ button:active {
     
     #gameBoard {
         border: 6px solid #1a1a1a;
-        padding: 5px;
+        padding: 0;
+        margin: 0;
         box-shadow: 0 6px 0 #000, 0 8px 15px rgba(0,0,0,0.8);
     }
     
     .cell {
         width: 40px;
         height: 40px;
-        margin: 2px;
+        margin: 0;
         border: 3px solid #000;
+        box-sizing: border-box;
     }
     
     .game-controls {
@@ -513,8 +555,9 @@ button:active {
     .cell {
         width: 32px;
         height: 32px;
-        margin: 2px;
+        margin: 0;
         border: 2px solid #000;
+        box-sizing: border-box;
     }
     
     #statusMessage {
@@ -597,7 +640,9 @@ button:active {
     .cell {
         width: 28px;
         height: 28px;
-        margin: 1px;
+        margin: 0;
+        border: 2px solid #000;
+        box-sizing: border-box;
     }
     
     #gameBoard {

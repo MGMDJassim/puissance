@@ -87,6 +87,20 @@ function afficherGameBoard(gameData) {
 function generateGameBoard(board, rows, cols){
     const gameBoard = document.getElementById("gameBoard");
     gameBoard.innerHTML = ""; 
+    
+    // Ajouter une rangée avec les scores EN HAUT
+    const scoresRow = document.createElement("div");
+    scoresRow.classList.add("scores-row");
+    scoresRow.id = "scoresDisplay";
+    for (let c = 0; c < cols; c++) {
+        const scoreDiv = document.createElement("div");
+        scoreDiv.classList.add("score-cell");
+        scoreDiv.id = `score-col-${c}`;
+        scoreDiv.textContent = "-";
+        scoresRow.appendChild(scoreDiv);
+    }
+    gameBoard.appendChild(scoresRow);
+    
     for (let r = 0; r < rows; r++) {
         const rowDiv = document.createElement("div");
         rowDiv.classList.add("row");
@@ -103,8 +117,65 @@ function generateGameBoard(board, rows, cols){
             }
             rowDiv.appendChild(cellDiv);
         }
-
         gameBoard.appendChild(rowDiv);
+    }
+    
+    // Charger les scores
+    displayScores();
+}
+
+/**
+ * Afficher les scores/poids de chaque colonne sous la grille
+ */
+async function displayScores() {
+    try {
+        const response = await fetch('/api/game/ai-scores');
+        const data = await response.json();
+        const scores = data.columnScores;
+        
+        if (!scores) return;
+        
+        // Trouver le meilleur score (en excluant les colonnes pleines)
+        let maxScore = Math.max(...scores.filter(s => s > -2147483648));
+        let minScore = Math.min(...scores.filter(s => s > -2147483648));
+        
+        // Afficher les scores avec gradient de couleur
+        for (let c = 0; c < scores.length; c++) {
+            const scoreDiv = document.getElementById(`score-col-${c}`);
+            if (scoreDiv) {
+                // Si colonne est remplie (Integer.MIN_VALUE)
+                if (scores[c] <= -2147483648) {
+                    scoreDiv.textContent = "X";
+                    scoreDiv.style.backgroundColor = '#888888'; // Gris pour colonne remplie
+                    scoreDiv.style.color = '#FFF';
+                    scoreDiv.style.fontWeight = 'bold';
+                } else {
+                    scoreDiv.textContent = scores[c];
+                    
+                    // Colorer selon le score
+                    if (scores[c] === maxScore && scores[c] > 0) {
+                        scoreDiv.style.backgroundColor = '#00DD00'; // Vert = meilleur coup
+                        scoreDiv.style.color = '#000';
+                        scoreDiv.style.fontWeight = 'bold';
+                    } else if (scores[c] === minScore && scores[c] < 0) {
+                        scoreDiv.style.backgroundColor = '#FF4444'; // Rouge = mauvais coup
+                        scoreDiv.style.color = '#fff';
+                        scoreDiv.style.fontWeight = 'bold';
+                    } else if (scores[c] > 0) {
+                        scoreDiv.style.backgroundColor = '#90EE90'; // Vert clair
+                        scoreDiv.style.color = '#000';
+                    } else if (scores[c] < 0) {
+                        scoreDiv.style.backgroundColor = '#FF9999'; // Rouge clair
+                        scoreDiv.style.color = '#000';
+                    } else {
+                        scoreDiv.style.backgroundColor = '#FFFF99'; // Jaune = neutre
+                        scoreDiv.style.color = '#000';
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        console.error('Erreur affichage scores:', error);
     }
 }
 
@@ -479,7 +550,7 @@ async function replayGame(gameId) {
             
             for (const move of moves) {
                 try {
-                    const col = parseInt(move.trim());
+                    const col = parseInt(move.trim()) - 1;  // Convertir de 1-based à 0-based
                     console.log('Playing move:', col);
                     
                     if (col >= 0 && col < 9) {
@@ -547,5 +618,97 @@ window.onclick = function(event) {
     const modal = document.getElementById('historyModal');
     if (event.target === modal) {
         modal.style.display = 'none';
+    }
+}
+
+/**
+ * Charger la suggestion IA avec meilleur coup et prédiction
+ */
+async function loadSuggestion() {
+    try {
+        const response = await fetch('/api/game/suggest');
+        const data = await response.json();
+        
+        const suggestionText = document.getElementById('suggestionText');
+        
+        let predictionEmoji = '';
+        if (data.prediction === 'victoire') predictionEmoji = '✅ Victoire';
+        else if (data.prediction === 'defaite') predictionEmoji = '❌ Défaite';
+        else if (data.prediction === 'nul') predictionEmoji = '🤝 Nul';
+        else predictionEmoji = '❓ Incertaine';
+        
+        suggestionText.innerHTML = `
+            <strong>Colonne: ${data.suggestedColumn}</strong><br>
+            Score: ${data.score}<br>
+            <em>${predictionEmoji}</em>
+        `;
+    } catch (error) {
+        console.error('Erreur suggestion:', error);
+        document.getElementById('suggestionText').innerHTML = '⚠️ Erreur de calcul';
+    }
+}
+
+/**
+ * Charger les statistiques des parties
+ */
+async function loadStats() {
+    try {
+        const response = await fetch('/api/game/stats');
+        const stats = await response.json();
+        
+        document.getElementById('statsTotalGames').innerHTML = `Total: <strong>${stats.totalGames}</strong>`;
+        document.getElementById('statsHumanWins').innerHTML = `Humain: <strong>${stats.humanWins}</strong> (${stats.humanWinRate})`;
+        document.getElementById('statsAiWins').innerHTML = `IA: <strong>${stats.aiWins}</strong> (${stats.aiWinRate})`;
+        document.getElementById('statsDraws').innerHTML = `Nuls: <strong>${stats.draws}</strong>`;
+    } catch (error) {
+        console.error('Erreur stats:', error);
+        document.getElementById('statsBox').innerHTML = '⚠️ Erreur de chargement';
+    }
+}
+
+// Charger les stats au démarrage
+window.addEventListener('load', () => {
+    loadStats();
+});
+
+/**
+ * Analyser une image du plateau Puissance 4
+ */
+async function analyzeImage() {
+    const fileInput = document.getElementById('imageUpload');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        document.getElementById('analysisResult').textContent = '❌ Veuillez sélectionner une image';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    try {
+        document.getElementById('analysisResult').textContent = '⏳ Analyse en cours...';
+        
+        const response = await fetch('/api/game/analyze-image', {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            document.getElementById('analysisResult').textContent = `❌ Erreur: ${result.error}`;
+            return;
+        }
+        
+        let resultText = `<strong>✅ Plateau reconnu!</strong><br>`;
+        resultText += `Meilleur coup: <strong>Colonne ${result.bestMove}</strong><br>`;
+        resultText += `Score: ${result.score}<br>`;
+        resultText += `Prédiction: ${result.prediction}`;
+        
+        document.getElementById('analysisResult').innerHTML = resultText;
+    } catch (error) {
+        console.error('Erreur analyse:', error);
+        document.getElementById('analysisResult').textContent = '❌ Erreur lors de l\'analyse';
     }
 }

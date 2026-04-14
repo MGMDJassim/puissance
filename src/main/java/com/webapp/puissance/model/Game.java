@@ -2,6 +2,7 @@ package com.webapp.puissance.model;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.math.BigInteger;
 
 public class Game {
     private final int rows = 9;
@@ -163,5 +164,81 @@ public class Game {
             cnt++; rr += dr; cc += dc;
         }
         return cnt;
+    }
+
+    // ===== ENCODAGE HEXADÉCIMAL (compatible DAO) =====
+    
+    /**
+     * Encode le plateau en base 3, puis convertit en hexadécimal
+     * Format : chaque cellule (0/1/2) est un chiffre base 3
+     * Lecture : ligne par ligne, colonne par colonne
+     * 
+     * @param board le plateau de jeu
+     * @return représentation hexadécimale du plateau
+     */
+    public static String toHex(int[][] board) {
+        BigInteger value = BigInteger.ZERO;
+        BigInteger base = BigInteger.valueOf(3);
+        int rows = board.length;
+        int cols = board[0].length;
+        
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                value = value.multiply(base).add(BigInteger.valueOf(board[r][c]));
+            }
+        }
+        
+        return value.toString(16).toUpperCase();
+    }
+    
+    /**
+     * Retourne le miroir horizontal du plateau (colonnes inversées)
+     * 
+     * @param board le plateau
+     * @return plateau miroir
+     */
+    public static int[][] mirror(int[][] board) {
+        int rows = board.length;
+        int cols = board[0].length;
+        int[][] sym = new int[rows][cols];
+        
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                sym[r][c] = board[r][cols - 1 - c];
+            }
+        }
+        
+        return sym;
+    }
+    
+    /**
+     * Forme canonique : sélectionne la plus petite représentation hex
+     * entre le plateau et son symétrique
+     * 
+     * @param a première représentation hex
+     * @param b deuxième représentation hex
+     * @return la plus petite (lexicographiquement après padding)
+     */
+    public static String canonical(String a, String b) {
+        // Padder à la même longueur avant comparaison
+        int len = Math.max(a.length(), b.length());
+        String pa = String.format("%" + len + "s", a).replace(' ', '0');
+        String pb = String.format("%" + len + "s", b).replace(' ', '0');
+        return pa.compareTo(pb) <= 0 ? a : b;
+    }
+    
+    /**
+     * Calcule la position canonique avec son symétrique
+     * Retourne un tableau [canonique, symétrique]
+     * 
+     * @param board le plateau
+     * @return [canonical_hex, sym_hex]
+     */
+    public static String[] getCanonicalAndSymmetric(int[][] board) {
+        String hex = toHex(board);
+        String symHex = toHex(mirror(board));
+        String canonical = canonical(hex, symHex);
+        String symCanonical = canonical.equals(hex) ? symHex : hex;
+        return new String[]{canonical, symCanonical};
     }
 }
