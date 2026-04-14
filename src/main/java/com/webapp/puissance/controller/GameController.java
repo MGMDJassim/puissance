@@ -364,6 +364,40 @@ public class GameController {
     }
     
     /**
+     * Importer une partie à partir d'une séquence de coups
+     * POST /api/game/import?sequence=3131313
+     * @param sequence la séquence des coups (ex: "3131313" où chaque chiffre est une colonne 1-9)
+     * @return JSON avec l'état de l'importation et l'ID de la partie
+     */
+    @PostMapping("/import")
+    public ResponseEntity<Map<String, Object>> importGame(
+            @RequestParam("sequence") String sequence) {
+        try {
+            if (sequence == null || sequence.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "message", "La séquence ne peut pas être vide"));
+            }
+            
+            Map<String, Object> result = gameService.importGameFromSequence(sequence);
+            
+            if ((boolean) result.get("success")) {
+                return ResponseEntity.ok(result);
+            } else if (!(boolean) result.get("imported")) {
+                // Partie existe déjà
+                return ResponseEntity.ok(result);
+            } else {
+                return ResponseEntity.badRequest().body(result);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("message", "Erreur lors de l'importation: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+    
+    /**
      * Construire la réponse JSON avec toutes les infos du jeu
      */
     private Map<String, Object> buildGameResponse(Game game) {

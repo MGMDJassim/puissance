@@ -66,6 +66,54 @@ function updateStatusMessage() {
                           (gameMode === 'jvia' && currentPlayer === 2) ? "IA (Jaune)" : "Joueur 2 (Jaune)";
         statusDiv.textContent = `Au tour de : ${playerName}`;
         statusDiv.style.color = currentPlayer === 1 ? "#ef4444" : "#fbbf24";
+        
+        // Afficher la suggestion pour le joueur humain
+        if ((gameMode === 'jvj' || (gameMode === 'jvia' && currentPlayer === 1)) && !gameOver) {
+            displaySuggestion();
+        }
+    }
+}
+
+/**
+ * Afficher la suggestion du meilleur coup au joueur humain
+ */
+async function displaySuggestion() {
+    let suggestionDiv = document.getElementById("suggestionMessage");
+    if (!suggestionDiv) {
+        suggestionDiv = document.createElement("div");
+        suggestionDiv.id = "suggestionMessage";
+        suggestionDiv.style.cssText = `
+            margin-top: 15px;
+            padding: 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+            font-size: 16px;
+        `;
+        document.querySelector(".grille").appendChild(suggestionDiv);
+    }
+    
+    try {
+        const response = await fetch('/api/game/suggest');
+        const data = await response.json();
+        
+        if (data.suggestedColumn !== undefined && data.suggestedColumn >= 0) {
+            const prediction = data.prediction || 'incertaine';
+            const predictionEmoji = {
+                'victoire': '🏆',
+                'defaite': '⚠️',
+                'nul': '🤝',
+                'incertaine': '🤔'
+            }[prediction] || '💡';
+            
+            suggestionDiv.textContent = `${predictionEmoji} Meilleur coup: colonne ${data.suggestedColumn} (Score: ${data.score})`;
+        } else {
+            suggestionDiv.textContent = '💭 Aucun coup conseillé';
+        }
+    } catch (error) {
+        console.error('Erreur affichage suggestion:', error);
     }
 }
 
@@ -494,6 +542,121 @@ async function showGameHistory() {
 
 function closeGameHistory() {
     document.getElementById('historyModal').style.display = 'none';
+}
+
+/**
+ * Importer une partie d'un fichier téléchargé
+ */
+async function importGameFromFile() {
+    const fileInput = document.getElementById('historyFileInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showImportMessage('Veuillez sélectionner un fichier', 'error');
+        return;
+    }
+    
+    // Extraire la séquence du nom du fichier
+    const filename = file.name;
+    const sequenceMatch = filename.match(/^([0-9]+)\.txt$/);
+    
+    if (!sequenceMatch) {
+        showImportMessage('Format invalide. Le fichier doit être nommé: [séquence].txt (ex: 3131313.txt)', 'error');
+        return;
+    }
+    
+    const sequence = sequenceMatch[1];
+    await performImport(sequence);
+}
+
+/**
+ * Importer une partie d'une séquence manuelle
+ */
+async function importGameFromSequence() {
+    const sequenceInput = document.getElementById('historySequenceInput');
+    const sequence = sequenceInput.value.trim();
+    
+    if (!sequence) {
+        showImportMessage('Veuillez entrer une séquence (ex: 3131313)', 'error');
+        return;
+    }
+    
+    await performImport(sequence);
+}
+
+/**
+ * Effectuer l'importation
+ */
+async function performImport(sequence) {
+    if (!/^[1-9]+$/.test(sequence)) {
+        showImportMessage('La séquence doit contenir uniquement des chiffres 1-9', 'error');
+        return;
+    }
+    
+    if (sequence.length > 81) {
+        showImportMessage('La séquence ne peut pas dépasser 81 coups', 'error');
+        return;
+    }
+    
+    try {
+        showImportMessage('Importation en cours...', 'loading');
+        
+        const response = await fetch(`/api/game/import?sequence=${encodeURIComponent(sequence)}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.imported && data.success) {
+            showImportMessage(`✓ Partie #${data.gameId} importée! (${data.nbCoups} coups - ${data.gameStatus})`, 'success');
+            document.getElementById('historyFileInput').value = '';
+            document.getElementById('historySequenceInput').value = '';
+            
+            // Recharger l'historique après 2 secondes
+            setTimeout(() => {
+                showGameHistory();
+            }, 1500);
+        } else if (!data.success && data.existingGameId) {
+            showImportMessage(`⚠️ Cette partie existe déjà! (Partie #${data.existingGameId})`, 'warning');
+        } else {
+            showImportMessage(data.message || 'Erreur lors de l\'importation', 'error');
+        }
+    } catch (error) {
+        showImportMessage('Erreur: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Afficher un message d'importation
+ */
+function showImportMessage(text, type) {
+    const messageDiv = document.getElementById('importMessage');
+    
+    if (!text) {
+        messageDiv.style.display = 'none';
+        return;
+    }
+    
+    messageDiv.style.display = 'block';
+    messageDiv.textContent = text;
+    
+    if (type === 'success') {
+        messageDiv.style.background = '#e8f5e9';
+        messageDiv.style.color = '#2e7d32';
+        messageDiv.style.borderLeft = '4px solid #4caf50';
+    } else if (type === 'error') {
+        messageDiv.style.background = '#ffebee';
+        messageDiv.style.color = '#c62828';
+        messageDiv.style.borderLeft = '4px solid #f44336';
+    } else if (type === 'warning') {
+        messageDiv.style.background = '#fff3e0';
+        messageDiv.style.color = '#e65100';
+        messageDiv.style.borderLeft = '4px solid #ff9800';
+    } else if (type === 'loading') {
+        messageDiv.style.background = '#e3f2fd';
+        messageDiv.style.color = '#1565c0';
+        messageDiv.style.borderLeft = '4px solid #2196f3';
+    }
 }
 
 function formatDate(dateString) {

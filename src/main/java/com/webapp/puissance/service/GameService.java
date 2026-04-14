@@ -405,4 +405,78 @@ public class GameService {
         return info;
     }
     
+    /**
+     * Importer une partie à partir d'une séquence
+     * @param sequence la séquence des coups (ex: "3131313")
+     * @return Map avec l'état de l'importation
+     */
+    public java.util.Map<String, Object> importGameFromSequence(String sequence) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        // Vérifier si la partie existe déjà dans la BD
+        List<GameSession> existingSessions = gameSessionRepository.findAll();
+        for (GameSession session : existingSessions) {
+            if (sequence.equals(session.getSequence())) {
+                result.put("success", false);
+                result.put("imported", false);
+                result.put("message", "Cette partie existe déjà dans la base de données");
+                result.put("existingGameId", session.getId());
+                result.put("existingGameStatus", session.getStatus());
+                return result;
+            }
+        }
+        
+        // Créer un nouveau jeu et rejouer la séquence
+        Game importedGame = new Game();
+        
+        // Parser la séquence (chaque chiffre = colonne+1, donc 0-8 -> 1-9)
+        for (int i = 0; i < sequence.length(); i++) {
+            char digit = sequence.charAt(i);
+            int column = Character.getNumericValue(digit);
+            
+            if (column < 1 || column > 9) {
+                result.put("success", false);
+                result.put("message", "Colonne invalide: " + column + " (doit être entre 1 et 9)");
+                return result;
+            }
+            
+            // Convertir en 0-based
+            int col = column - 1;
+            
+            // Jouer le coup
+            int row = importedGame.drop(col);
+            
+            if (row == -1) {
+                result.put("success", false);
+                result.put("message", "Coup invalide à la position " + (i+1) + ": colonne " + column + " est pleine");
+                return result;
+            }
+        }
+        
+        // Déterminer l'état de la partie
+        String status = importedGame.isGameOver() ? "TERMINEE" : "EN_COURS";
+        int winner = importedGame.getWinner();
+        
+        // Créer et sauvegarder la session
+        GameSession session = new GameSession();
+        session.setSequence(sequence);
+        session.setNbCoups(sequence.length());
+        session.setWinner(winner);
+        session.setMode(null); // Pas d'IA pour les parties importées
+        session.setStatus(status);
+        session.setCreatedAt(LocalDateTime.now());
+        
+        GameSession saved = gameSessionRepository.save(session);
+        
+        result.put("success", true);
+        result.put("imported", true);
+        result.put("message", "Partie importée avec succès");
+        result.put("gameId", saved.getId());
+        result.put("gameStatus", status);
+        result.put("gameWinner", winner);
+        result.put("nbCoups", sequence.length());
+        
+        return result;
+    }
+    
 }
