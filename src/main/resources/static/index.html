@@ -16,11 +16,14 @@
         <div id="choix">        
                 <button id="jvjButton" onclick="choisirMode(event)">Jouer</button>
                 <button id="historyButton" onclick="showGameHistory()" style="background-color: #FF6B00;">Historique</button>
+                <button id="analyzeSequenceButton" onclick="openSequenceAnalysisModal()" style="background-color: #8B4513;">Analyser Séquence</button>
         </div>
 
         <div class="game-container" >
             <div class="grille" >
+                    <div id="statusMessage"></div>
                     <div id="gameBoard"></div>
+                    <div id="suggestionMessage" style="display:none; margin-top:15px; padding:12px; min-height:24px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white; border-radius:8px; font-weight:bold; text-align:center; font-size:16px;"></div>
                     <div class="game-controls">
                         <button id="resetButton" onclick="resetGame()">Recommencer</button>
                         <button id="undoButton" onclick="undoMove()">Annuler le dernier coup</button>
@@ -61,14 +64,7 @@
                         <button onclick="loadStats()" class="menu-btn" style="margin-top:5px;">Actualiser</button>
                     </div>
                 </div>
-                <div class="menu-section">
-                    <h4>Analyser Image</h4>
-                    <div id="imageAnalysisBox" style="padding:10px; background:#f0f9ff; border-radius:5px; text-align:center;">
-                        <input type="file" id="imageUpload" accept="image/*" style="margin-bottom:10px; font-size:0.8em;">
-                        <button onclick="analyzeImage()" class="menu-btn" style="margin-top:5px;">Analyser</button>
-                        <p id="analysisResult" style="margin:10px 0; font-size:0.85em; color:#333;">Uploadez une image...</p>
-                    </div>
-                </div>
+
             </div>
         </div>
     </div>
@@ -96,6 +92,64 @@
             <div id="historyList" class="history-list">
                 <p>Chargement...</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal Choix du Mode de Jeu -->
+    <div id="gameModeModal" class="modal" style="display:none;">
+        <div class="modal-content" style="text-align: center; max-width: 450px;">
+            <h2 style="margin-bottom: 20px;">Quel mode de jeu ?</h2>
+            <div style="display: flex; justify-content: center; gap: 20px; margin-bottom: 20px; flex-wrap: wrap;">
+                <div style="cursor: pointer; text-align: center; flex: 1; min-width: 150px;" onclick="selectGameMode('jvj')">
+                    <div style="font-size: 3em; margin-bottom: 10px;">JvJ</div>
+                    <button style="padding: 12px 20px; background: #8b5cf6; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%;">HUMAIN VS HUMAIN</button>
+                </div>
+                <div style="cursor: pointer; text-align: center; flex: 1; min-width: 150px;" onclick="selectGameMode('jvia')">
+                    <div style="font-size: 3em; margin-bottom: 10px;">JvIA</div>
+                    <button style="padding: 12px 20px; background: #10b981; color: white; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; width: 100%;">HUMAIN VS IA</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Analyse Séquence -->
+    <div id="sequenceAnalysisModal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width: 600px; text-align: center;">
+            <span class="close" onclick="closeSequenceAnalysisModal()">&times;</span>
+            <h2 style="margin-bottom: 20px;">Analyser une Séquence</h2>
+            
+            <div style="margin-bottom:15px;">
+                <label style="font-size:0.85em; display:block; margin-bottom:8px; font-weight:bold;">Jeton:</label>
+                <div style="display:flex; gap:5px; justify-content:center;">
+                    <button onclick="setAnalysisPerspective(1)" id="perspectiveBtn1" style="flex:0 1 100px; padding:8px; background:#ef4444; color:white; border:none; border-radius:3px; font-size:0.85em; cursor:pointer; font-weight:bold; opacity:0.6;">🔴 Rouge</button>
+                    <button onclick="setAnalysisPerspective(2)" id="perspectiveBtn2" style="flex:0 1 100px; padding:8px; background:#fbbf24; color:#333; border:none; border-radius:3px; font-size:0.85em; cursor:pointer; font-weight:bold; opacity:0.6;">🟡 Jaune</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="font-size:0.85em; display:block; margin-bottom:8px; font-weight:bold;">Position de jeu:</label>
+                <div style="display:flex; gap:5px; justify-content:center;">
+                    <button onclick="setAnalysisPlayerRole(1)" id="roleBtn1" style="flex:0 1 auto; padding:8px 12px; background:#9ca3af; color:white; border:none; border-radius:3px; font-size:0.85em; cursor:pointer; font-weight:bold; opacity:0.6;">Joueur 1 (Première)</button>
+                    <button onclick="setAnalysisPlayerRole(2)" id="roleBtn2" style="flex:0 1 auto; padding:8px 12px; background:#737373; color:white; border:none; border-radius:3px; font-size:0.85em; cursor:pointer; font-weight:bold; opacity:0.6;">Joueur 2 (Deuxième)</button>
+                </div>
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="font-size:0.85em; display:block; margin-bottom:5px; font-weight:bold;">Séquence (ex: 3131313):</label>
+                <input type="text" id="sequenceAnalysisInput" placeholder="Entrez la séquence" maxlength="50" style="width:100%; padding:8px; border:2px solid #ddd; border-radius:5px; font-size:0.9em; box-sizing:border-box;">
+            </div>
+            
+            <div style="margin-bottom:15px;">
+                <label style="font-size:0.85em; display:block; margin-bottom:5px; font-weight:bold;">Difficulté:</label>
+                <select id="analysisDifficultySelect" style="width:100%; padding:8px; border:2px solid #ddd; border-radius:5px; font-size:0.85em;">
+                    <option value="1">Facile</option>
+                    <option value="3" selected>Moyen</option>
+                    <option value="5">Difficile</option>
+                </select>
+            </div>
+            
+            <button onclick="analyzeGameSequence()" class="menu-btn" style="margin-bottom:15px; width:100%; padding:12px;">Analyser</button>
+            <div id="sequenceAnalysisResult" style="font-size:0.85em; color:#333; display:none; padding:10px; background:white; border-radius:3px; border-left:4px solid #ff9800;"></div>
         </div>
     </div>
 

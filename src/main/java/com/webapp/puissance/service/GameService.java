@@ -59,6 +59,61 @@ public class GameService {
         return currentGame;
     }
     
+    /**
+     * Obtenir la séquence du jeu actuel (tous les coups joués)
+     * @return String de la séquence (ex: "1234567896")
+     */
+    public String getCurrentSequence() {
+        if (currentGame == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Integer col : currentGame.getMoveHistory()) {
+            sb.append(col);
+        }
+        return sb.toString();
+    }
+    
+    /**
+     * Reconstruire le jeu client à partir d'une séquence
+     * Utilisé pour resynchroniser le frontend et backend avant chaque coup
+     * @param sequence la séquence des coups (ex: "3131313")
+     */
+    public void rebuildGameFromSequence(String sequence) {
+        System.out.println("=== REBUILD GAME FROM SEQUENCE ===");
+        System.out.println("Sequence received: " + sequence);
+        System.out.println("Sequence length: " + (sequence != null ? sequence.length() : "null"));
+        
+        currentGame = new Game();
+        
+        if (sequence != null && !sequence.isEmpty()) {
+            for (int i = 0; i < sequence.length(); i++) {
+                char digit = sequence.charAt(i);
+                int column = Character.getNumericValue(digit);
+                
+                System.out.println("Move " + (i+1) + ": digit='" + digit + "', column=" + column);
+                
+                if (column >= 1 && column <= 9) {
+                    int col = column - 1; // Convertir en 0-based
+                    int row = currentGame.drop(col);
+                    
+                    System.out.println("  -> Played at row=" + row + ", col=" + col + ", currentPlayer=" + currentGame.getCurrentPlayer());
+                    
+                    if (row == -1) {
+                        // Séquence invalide - arrêter
+                        System.err.println("Séquence invalide à la position " + (i+1) + ": colonne " + column + " est pleine");
+                        break;
+                    }
+                } else {
+                    System.err.println("Colonne invalide: " + column);
+                }
+            }
+        }
+        
+        System.out.println("Final game state: moves=" + currentGame.getMoveHistory().size() + ", currentPlayer=" + currentGame.getCurrentPlayer());
+        System.out.println("=== END REBUILD ===");
+    }
+    
     public int playMove(int column) {
         return currentGame.drop(column);
     }
@@ -129,8 +184,22 @@ public class GameService {
         System.out.println("Game over: " + currentGame.isGameOver());
         System.out.println("Winner: " + currentGame.getWinner());
         System.out.println("AI Mode: " + aiMode);
+        System.out.println("Current Session ID: " + currentGameSessionId);
         
-        GameSession session = new GameSession();
+        GameSession session;
+        
+        // Si la partie est déjà sauvegardée, la mettre à jour
+        if (currentGameSessionId != null) {
+            session = gameSessionRepository.findById(currentGameSessionId).orElse(null);
+            if (session == null) {
+                // Créer une nouvelle si elle n'existe pas
+                session = new GameSession();
+            }
+        } else {
+            // Créer une nouvelle partie
+            session = new GameSession();
+        }
+        
         String sequence = "";
         if (currentGame.getMoveHistory() != null) {
             for (Integer move : currentGame.getMoveHistory()) {
@@ -143,7 +212,11 @@ public class GameService {
         session.setWinner(currentGame.getWinner() > 0 ? currentGame.getWinner() : 0);
         session.setMode(aiMode ? "HUMAN_VS_AI" : "HUMAN_VS_HUMAN");
         session.setStatus(currentGame.getWinner() > 0 ? "TERMINEE" : "EN_COURS");
-        session.setCreatedAt(LocalDateTime.now());
+        
+        // Ne pas réinitialiser createdAt si c'est une mise à jour
+        if (session.getCreatedAt() == null) {
+            session.setCreatedAt(LocalDateTime.now());
+        }
         
         GameSession saved = gameSessionRepository.save(session);
         currentGameSessionId = saved.getId();
@@ -157,6 +230,70 @@ public class GameService {
 
     public GameSession loadGame(Long gameId) {
         return gameSessionRepository.findById(gameId).orElse(null);
+    }
+
+    /**
+     * Charger une partie EN_COURS ou TERMINEE et la mettre comme partie courante
+     * Cela permet au frontend de continuer à jouer après avoir chargé une partie
+     * Ou de voir les positions gagnantes pour une partie terminée
+     * @param gameId l'ID de la partie
+     * @return la GameSession chargée, ou null si non trouvée
+     */
+    public GameSession loadGameToContinue(Long gameId) {
+        System.out.println("=== LOAD GAME TO CONTINUE ===");
+        System.out.println("gameId: " + gameId);
+        
+        GameSession session = gameSessionRepository.findById(gameId).orElse(null);
+        
+        if (session == null) {
+            System.out.println("Session not found");
+            return null; // Partie non trouvée
+        }
+        
+        // Permettre EN_COURS, TERMINEE, et ABANDONNEE
+        if (!"EN_COURS".equals(session.getStatus()) && !"TERMINEE".equals(session.getStatus()) && !"ABANDONNEE".equals(session.getStatus())) {
+            System.out.println("Invalid status: " + session.getStatus());
+            return null;
+        }
+        
+        System.out.println("Session found. Status: " + session.getStatus() + ", Sequence: " + session.getSequence());
+        
+        // Créer un nouveau jeu et rejouer la séquence
+        currentGame = new Game();
+        
+        String sequence = session.getSequence();
+        if (sequence != null && !sequence.isEmpty()) {
+            for (int i = 0; i < sequence.length(); i++) {
+                char digit = sequence.charAt(i);
+                int column = Character.getNumericValue(digit);
+                
+                System.out.println("Move " + (i+1) + ": digit='" + digit + "', column=" + column);
+                
+                if (column < 1 || column > 9) {
+                    System.out.println("Invalid column: " + column);
+                    return null; // Séquence invalide
+                }
+                
+                // Convertir en 0-based et jouer le coup
+                int col = column - 1;
+                int row = currentGame.drop(col);
+                
+                System.out.println("  -> Played at row=" + row + ", col=" + col);
+                
+                if (row == -1) {
+                    System.out.println("Column full at position " + (i+1));
+                    return null; // Coup invalide
+                }
+            }
+        }
+        
+        // Mettre à jour l'ID de session courante pour les futurs saves
+        currentGameSessionId = gameId;
+        
+        System.out.println("Final state: moves=" + currentGame.getMoveHistory().size() + ", currentPlayer=" + currentGame.getCurrentPlayer());
+        System.out.println("=== END LOAD GAME TO CONTINUE ===");
+        
+        return session;
     }
 
     public List<GameSession> getAllGameSessions() {
@@ -464,11 +601,22 @@ public class GameService {
         session.setSequence(sequence);
         session.setNbCoups(sequence.length());
         session.setWinner(winner);
-        session.setMode(null); // Pas d'IA pour les parties importées
+        session.setMode("HUMAN_VS_HUMAN"); // Les parties importées sont JVJ par défaut
         session.setStatus(status);
         session.setCreatedAt(LocalDateTime.now());
         
         GameSession saved = gameSessionRepository.save(session);
+        
+        // IMPORTANT: Mettre à jour le jeu courant en mémoire et l'ID de la session
+        // Sinon le système garderait l'ancienne partie en mémoire
+        currentGame = importedGame;
+        currentGameSessionId = saved.getId();
+        
+        System.out.println("=== IMPORT SUCCESSFUL ===");
+        System.out.println("Imported sequence: " + sequence);
+        System.out.println("Game saved with ID: " + saved.getId());
+        System.out.println("currentGame updated in memory");
+        System.out.println("currentGameSessionId set to: " + currentGameSessionId);
         
         result.put("success", true);
         result.put("imported", true);
@@ -479,6 +627,125 @@ public class GameService {
         result.put("nbCoups", sequence.length());
         
         return result;
+    }
+
+    /**
+     * Analyser une séquence de coups pour voir combien de coups supplémentaires
+     * il faut pour que le joueur spécifié gagne
+     * @param sequence la séquence des coups (ex: "3131313")
+     * @param aiDifficulty niveau de difficulté de l'IA (1-6)
+     * @param perspective quel joueur on analyse (1=Joueur1, 2=Joueur2)
+     * @return Map avec l'analyse complète
+     */
+    public java.util.Map<String, Object> analyzeSequence(String sequence, int aiDifficulty, int perspective, int playerRole) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        // Créer un nouveau jeu
+        Game analysisGame = new Game();
+        
+        // Mapper les joueurs en fonction du playerRole:
+        // Si playerRole == 1: l'utilisateur est Joueur 1 (joue coups 1, 3, 5, ...)
+        // Si playerRole == 2: l'utilisateur est Joueur 2 (joue coups 2, 4, 6, ...)
+        // Donc si playerRole == 2, les joueurs doivent être inversés dans la séquence
+        
+        // Vérifier que la séquence est valide et rejouer les coups
+        try {
+            for (int i = 0; i < sequence.length(); i++) {
+                char digit = sequence.charAt(i);
+                int column = Character.getNumericValue(digit);
+                
+                if (column < 1 || column > 9) {
+                    result.put("success", false);
+                    result.put("error", "Colonne invalide: " + column + " (doit être entre 1 et 9)");
+                    return result;
+                }
+                
+                // Convertir en 0-based et jouer le coup
+                int col = column - 1;
+                int row = analysisGame.drop(col);
+                
+                if (row == -1) {
+                    result.put("success", false);
+                    result.put("error", "Coup invalide à la position " + (i+1) + ": colonne " + column + " est pleine");
+                    return result;
+                }
+            }
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", "Erreur lors du parsing de la séquence: " + e.getMessage());
+            return result;
+        }
+        
+        int initialMoves = analysisGame.getMoveHistory().size();
+        int additionalMoves = 0;
+        boolean gameFinished = analysisGame.isGameOver();
+        int gameWinner = 0;
+        
+        // Continuer à jouer jusqu'à la fin
+        if (!gameFinished) {
+            MinimaxAI aiPlayer1 = new MinimaxAI(1, Math.max(1, Math.min(6, aiDifficulty)));
+            MinimaxAI aiPlayer2 = new MinimaxAI(2, Math.max(1, Math.min(6, aiDifficulty)));
+            
+            while (!analysisGame.isGameOver() && additionalMoves < 100) {
+                int currentPlayer = analysisGame.getCurrentPlayer();
+                
+                // Déterminer quel joueur IA doit jouer
+                // Si playerRole == 2, les joueurs sont inversés dans l'analyse
+                int playerToMove = currentPlayer;
+                if (playerRole == 2) {
+                    // Inverser: si c'est Joueur 1 qui devrait jouer en normal, c'est Joueur 2 après
+                    playerToMove = (currentPlayer == 1) ? 2 : 1;
+                }
+                
+                if (playerToMove == 1) {
+                    int column = aiPlayer1.chooseColumn(analysisGame);
+                    if (column == -1) break;
+                    analysisGame.drop(column);
+                } else {
+                    int column = aiPlayer2.chooseColumn(analysisGame);
+                    if (column == -1) break;
+                    analysisGame.drop(column);
+                }
+                additionalMoves++;
+            }
+            
+            gameFinished = analysisGame.isGameOver();
+            gameWinner = analysisGame.getWinner();
+        }
+        
+        // Construire la réponse
+        result.put("success", true);
+        result.put("initialSequence", sequence);
+        result.put("initialMoves", initialMoves);
+        result.put("additionalMovesNeededToFinish", additionalMoves);
+        result.put("totalMovesInGame", initialMoves + additionalMoves);
+        result.put("gameFinished", gameFinished);
+        result.put("winner", gameWinner);
+        result.put("winnerName", gameWinner == 0 ? "Aucun (nul)" : (gameWinner == 1 ? "Joueur 1" : "Joueur 2"));
+        result.put("perspective", perspective);
+        result.put("playerRole", playerRole);
+        result.put("playerPositionName", playerRole == 1 ? "Joueur 1 (Premier)" : "Joueur 2 (Deuxième)");
+        result.put("playerTokenColor", perspective == 1 ? "🔴 Rouge" : "🟡 Jaune");
+        result.put("finalSequence", buildSequenceFromMoves(analysisGame.getMoveHistory()));
+        result.put("board", analysisGame.getBoardCopy());
+        result.put("rows", analysisGame.getRows());
+        result.put("cols", analysisGame.getCols());
+        result.put("difficulty", aiDifficulty);
+        result.put("currentPlayer", analysisGame.getCurrentPlayer());
+        result.put("winningPositions", analysisGame.getWinningPositions());
+        
+        return result;
+    }
+    
+    /**
+     * Construire une chaîne de séquence à partir d'une liste de coups
+     */
+    private String buildSequenceFromMoves(java.util.List<Integer> moves) {
+        StringBuilder sb = new StringBuilder();
+        for (Integer move : moves) {
+            sb.append(move);
+        }
+        return sb.toString();
     }
     
 }

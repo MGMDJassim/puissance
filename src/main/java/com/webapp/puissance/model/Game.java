@@ -41,7 +41,6 @@ public class Game {
         for (int r = rows - 1; r >= 0; r--) {
             if (board[r][c] == 0) {
                 board[r][c] = currentPlayer;
-                // record move as 1-based column index for storage
                 moveHistory.add(c + 1);
                 boolean win = checkWin(r, c);
                 if (win) gameOver = true;
@@ -54,7 +53,7 @@ public class Game {
 
     public void undo() {
         if (moveHistory.isEmpty() || gameOver) return;
-        int lastCol = moveHistory.remove(moveHistory.size() - 1) - 1; // convert back to 0-based
+        int lastCol = moveHistory.remove(moveHistory.size() - 1) - 1;
         for (int r = 0; r < rows; r++) {
             if (board[r][lastCol] != 0) {
                 board[r][lastCol] = 0;
@@ -93,7 +92,6 @@ public class Game {
         while (rr >= 0 && rr < rows && cc >= 0 && cc < cols && board[rr][cc] == p && list.size() < winLen) {
             list.add(0, new int[]{rr, cc}); rr -= dr; cc -= dc;
         }
-        // if more than winLen, trim center portion
         if (list.size() > winLen) {
             int start = (list.size() - winLen) / 2;
             List<int[]> trimmed = list.subList(start, start + winLen);

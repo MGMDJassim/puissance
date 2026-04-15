@@ -5,18 +5,32 @@ let gameOver = false;
 let aiDifficulty = 3;
 let turnCount = 0;
 let isProcessing = false;
+let analysisPerspective = null; // Perspective pour l'analyse (1=Rouge/Joueur1, 2=Jaune/Joueur2)
+let analysisPlayerRole = null; // Rôle du joueur analysé (1=Joueur 1/Premier, 2=Joueur 2/Deuxième)
+let playerStartsFirst = true; // Le joueur commence en premier ?
+let currentSequence = ""; // Séquence des coups jouée jusqu'à présent
+let currentGameSessionId = null; // ID de la partie chargée pour continuation
 
 
 async function choisirMode(event){
     const mode = event.target.id;
     
     if (mode === 'jvjButton') {
-        gameMode = 'jvj';
-        // Afficher modal de choix de couleur
-        document.getElementById("colorModal").style.display = "flex";
-        document.getElementById("colorModal").style.justifyContent = "center";
-        document.getElementById("colorModal").style.alignItems = "center";
+        // Afficher modal de choix du mode de jeu
+        document.getElementById("gameModeModal").style.display = "flex";
+        document.getElementById("gameModeModal").style.justifyContent = "center";
+        document.getElementById("gameModeModal").style.alignItems = "center";
     }
+}
+
+function selectGameMode(mode) {
+    gameMode = mode; // 'jvj' ou 'jvia'
+    document.getElementById("gameModeModal").style.display = "none";
+    
+    // Afficher modal de choix de couleur
+    document.getElementById("colorModal").style.display = "flex";
+    document.getElementById("colorModal").style.justifyContent = "center";
+    document.getElementById("colorModal").style.alignItems = "center";
 }
 
 function confirmColorChoice(color) {
@@ -26,13 +40,33 @@ function confirmColorChoice(color) {
 }
 
 async function startNewGame() {
+    // Nettoyer les anciens messages (victoire, suggestions, etc.)
+    const gameMessage = document.getElementById("gameMessage");
+    if (gameMessage) gameMessage.remove();
+    
+    const suggestionDiv = document.getElementById("suggestionMessage");
+    if (suggestionDiv) suggestionDiv.style.display = "none";
+    
     document.getElementById("choix").style.display = "none";
     document.querySelector(".game-container").style.display = "flex";
 
-    const response = await fetch('/api/game/new', {method: 'POST'});
-    const gameData = await response.json();
+    // Réinitialiser l'état de la séquence pour une nouvelle partie
+    currentSequence = "";
+    currentGameSessionId = null;
 
+    let response;
+    
+    if (gameMode === 'jvia') {
+        // Partie contre IA
+        response = await fetch(`/api/game/new-ai?difficulty=${aiDifficulty}`, {method: 'POST'});
+    } else {
+        // Partie joueur vs joueur
+        response = await fetch('/api/game/new', {method: 'POST'});
+    }
+    
+    const gameData = await response.json();
     currentPlayer = gameData.currentPlayer;
+
     gameOver = false;
     turnCount = 0;
     isProcessing = false;
@@ -45,6 +79,10 @@ async function startNewGame() {
 async function startNewGameWithAI(difficulty) {
     document.getElementById("choix").style.display = "none";
     document.querySelector(".game-container").style.display = "flex";
+
+    // Réinitialiser l'état de la séquence pour une nouvelle partie
+    currentSequence = "";
+    currentGameSessionId = null;
 
     const response = await fetch(`/api/game/new-ai?difficulty=${difficulty}`, {method: 'POST'});
     const gameData = await response.json();
@@ -62,11 +100,6 @@ async function startNewGameWithAI(difficulty) {
 
 function updateStatusMessage() {
     let statusDiv = document.getElementById("statusMessage");
-    if (!statusDiv) {
-        statusDiv = document.createElement("div");
-        statusDiv.id = "statusMessage";
-        document.querySelector(".grille").prepend(statusDiv);
-    }
 
     if (gameOver) {
         statusDiv.textContent = `Partie terminée !`;
@@ -97,26 +130,8 @@ function updateStatusMessage() {
     }
 }
 
-/**
- * Afficher la suggestion du meilleur coup au joueur humain
- */
 async function displaySuggestion() {
     let suggestionDiv = document.getElementById("suggestionMessage");
-    if (!suggestionDiv) {
-        suggestionDiv = document.createElement("div");
-        suggestionDiv.id = "suggestionMessage";
-        suggestionDiv.style.cssText = `
-            margin-top: 15px;
-            padding: 12px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 8px;
-            font-weight: bold;
-            text-align: center;
-            font-size: 16px;
-        `;
-        document.querySelector(".grille").appendChild(suggestionDiv);
-    }
     
     try {
         const response = await fetch('/api/game/suggest');
@@ -131,12 +146,15 @@ async function displaySuggestion() {
                 'incertaine': '🤔'
             }[prediction] || '💡';
             
-            suggestionDiv.textContent = `${predictionEmoji} Meilleur coup: colonne ${data.suggestedColumn} (Score: ${data.score})`;
+            suggestionDiv.textContent = `${predictionEmoji} Meilleur coup: colonne ${data.suggestedColumn + 1} (Score: ${data.score})`;
+            suggestionDiv.style.display = "block";
         } else {
             suggestionDiv.textContent = '💭 Aucun coup conseillé';
+            suggestionDiv.style.display = "block";
         }
     } catch (error) {
         console.error('Erreur affichage suggestion:', error);
+        suggestionDiv.style.display = "none";
     }
 }
 
@@ -146,15 +164,31 @@ function afficherGameBoard(gameData) {
     const board = gameData.board;
     const rows = gameData.rows;
     const cols = gameData.cols;
+    const winningPositions = gameData.winningPositions;  // Récupérer les positions gagnantes
     currentPlayer = gameData.currentPlayer;
     gameOver = gameData.gameOver;
+    
+    console.log("afficherGameBoard - winningPositions:", winningPositions);
+    console.log("afficherGameBoard - gameOver:", gameOver);
 
-    generateGameBoard(board, rows, cols);
+    generateGameBoard(board, rows, cols, winningPositions);  // Passer les positions gagnantes
 }
 
-function generateGameBoard(board, rows, cols){
+function generateGameBoard(board, rows, cols, winningPositions){
     const gameBoard = document.getElementById("gameBoard");
     gameBoard.innerHTML = ""; 
+    
+    // Créer un set pour les positions gagnantes pour une recherche rapide
+    const winningSet = new Set();
+    if (winningPositions && Array.isArray(winningPositions)) {
+        console.log("generateGameBoard - winningPositions array:", winningPositions);
+        for (let pos of winningPositions) {
+            winningSet.add(`${pos[0]},${pos[1]}`);
+        }
+        console.log("generateGameBoard - winningSet:", Array.from(winningSet));
+    } else {
+        console.log("generateGameBoard - no winning positions");
+    }
     
     // Ajouter une rangée avec les scores EN HAUT
     const scoresRow = document.createElement("div");
@@ -188,6 +222,12 @@ function generateGameBoard(board, rows, cols){
                 playerClass = playerColor === 'yellow' ? 'player1' : 'player2';
                 cellDiv.classList.add(playerClass);
             }
+            
+            // Ajouter la classe "winning" si c'est une position gagnante
+            if (winningSet.has(`${r},${c}`)) {
+                cellDiv.classList.add("winning");
+            }
+            
             rowDiv.appendChild(cellDiv);
         }
         gameBoard.appendChild(rowDiv);
@@ -297,7 +337,13 @@ async function handleCellClick(column) {
     isProcessing = true;
     
     try {
-        const response = await fetch(`/api/game/move?column=${column}`, {method: 'POST'});
+        // Construire l'URL avec la séquence pour resynchroniser le backend
+        let moveUrl = `/api/game/move?column=${column}`;
+        if (currentSequence) {
+            moveUrl += `&sequence=${encodeURIComponent(currentSequence)}`;
+        }
+        
+        const response = await fetch(moveUrl, {method: 'POST'});
         const gameData = await response.json();
 
         if (gameData.error || !response.ok) {
@@ -306,14 +352,22 @@ async function handleCellClick(column) {
             return;
         }
 
+        // Ajouter le coup joué à la séquence
+        currentSequence += (column + 1);  // column est 0-based, séquence est 1-based
+        
+        console.log("After move - currentSequence:", currentSequence);
+        console.log("gameData.sequence from response:", gameData.sequence);
+        
         turnCount++;
         afficherGameBoard(gameData);
         updateStatusMessage();
         updateGameInfo();
 
+        // Sauvegarder la partie après chaque coup (EN_COURS ou TERMINEE)
+        await fetch('/api/game/save', {method: 'POST'});
+
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
-                await fetch('/api/game/save', {method: 'POST'});
                 const winnerColor = playerColor === 'yellow' 
                     ? (gameData.winner === 1 ? 'Jaune' : 'Rouge')
                     : (gameData.winner === 1 ? 'Rouge' : 'Jaune');
@@ -322,7 +376,6 @@ async function handleCellClick(column) {
                     showGameMessage(`🎉 ${winnerName} (${winnerColor}) a gagné !`, "success");
                 }, 100);
             } else {
-                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     showGameMessage("🤝 Match nul ! La grille est pleine.", "info");
                 }, 100);
@@ -350,15 +403,32 @@ async function playAIMove() {
     isProcessing = true;
     
     try {
-        const response = await fetch('/api/game/ai-move', {method: 'POST'});
+        // Envoyer la séquence pour resynchroniser first
+        let aiMoveUrl = '/api/game/ai-move';
+        if (currentSequence) {
+            aiMoveUrl += `?sequence=${encodeURIComponent(currentSequence)}`;
+        }
+        
+        const response = await fetch(aiMoveUrl, {method: 'POST'});
         const gameData = await response.json();
+
+        // Mettre à jour currentSequence avec le coup joué par l'IA
+        if (gameData.moveHistory && gameData.moveHistory.length > currentSequence.length) {
+            // Récupérer le dernier coup ajouté
+            const lastMove = gameData.moveHistory[gameData.moveHistory.length - 1];
+            if (lastMove) {
+                currentSequence += lastMove;
+            }
+        }
 
         afficherGameBoard(gameData);
         updateStatusMessage();
 
+        // Sauvegarder la partie après le coup de l'IA (EN_COURS ou TERMINEE)
+        await fetch('/api/game/save', {method: 'POST'});
+
         if (gameData.gameOver) {
             if (gameData.winner > 0) {
-                await fetch('/api/game/save', {method: 'POST'});
                 const winnerColor = playerColor === 'yellow'
                     ? (gameData.winner === 1 ? 'Jaune' : 'Rouge')
                     : (gameData.winner === 1 ? 'Rouge' : 'Jaune');
@@ -367,7 +437,6 @@ async function playAIMove() {
                     showGameMessage(`🎉 ${winnerName} (${winnerColor}) a gagné !`, "success");
                 }, 100);
             } else {
-                await fetch('/api/game/save', {method: 'POST'});
                 setTimeout(() => {
                     showGameMessage("🤝 Match nul ! La grille est pleine.", "info");
                 }, 100);
@@ -392,8 +461,17 @@ async function resetGame() {
     isProcessing = true;
     
     try {
-        // Marquer la partie actuelle comme abandonnée
-        if (!gameOver) {
+        // Sauvegarder la partie avant de l'abandonner si elle n'est pas terminée ET qu'il y a des coups joués APRÈS chargement
+        // On regarde turnCount car c'est le nombre de coups joués depuis le chargement
+        if (!gameOver && turnCount > 0) {
+            console.log('Saving game before restart. Turns played:', turnCount);
+            await fetch('/api/game/save', {method: 'POST'})
+                .catch(error => console.error('Erreur save:', error));
+        }
+        
+        // Marquer la partie actuelle comme abandonnée SEULEMENT si des coups ont été joués APRÈS chargement
+        if (!gameOver && turnCount > 0) {
+            console.log('Marking game as abandoned before restart. Turns played:', turnCount);
             await fetch('/api/game/abandon', {method: 'POST'})
                 .catch(error => console.error('Erreur abandon:', error));
         }
@@ -403,9 +481,16 @@ async function resetGame() {
         if (gameMessage) gameMessage.remove();
         
         const suggestionDiv = document.getElementById("suggestionMessage");
-        if (suggestionDiv) suggestionDiv.remove();
+        if (suggestionDiv) suggestionDiv.style.display = "none";
         
-        // Réinitialiser la couleur et afficher le modal
+        // Réinitialiser l'état de la partie
+        currentSequence = "";
+        currentGameSessionId = null;
+        gameMode = null;
+        gameOver = false;
+        turnCount = 0;
+        
+        // Afficher le modal de couleur
         playerColor = null;
         document.getElementById("colorModal").style.display = "flex";
         document.getElementById("colorModal").style.justifyContent = "center";
@@ -426,14 +511,17 @@ async function resetGame() {
 async function goBack() {
     isProcessing = true;
     try {
-        // Sauvegarder la partie avant de l'abandonner
-        if (!gameOver && currentGame) {
+        // Sauvegarder la partie si elle n'est pas terminée ET qu'il y a des coups joués APRÈS le chargement
+        // On regarde turnCount car c'est le nombre de coups joués depuis le chargement
+        if (!gameOver && turnCount > 0) {
+            console.log('Saving game before going back. Turns played:', turnCount);
             await fetch('/api/game/save', {method: 'POST'})
                 .catch(error => console.error('Erreur save:', error));
         }
         
-        // Marquer comme abandonnée SEULEMENT si pas terminée
-        if (!gameOver) {
+        // Marquer comme abandonnée SEULEMENT si pas terminée ET qu'il y a des coups joués APRÈS chargement
+        if (!gameOver && turnCount > 0) {
+            console.log('Marking game as abandoned. Turns played:', turnCount);
             await fetch('/api/game/abandon', {method: 'POST'})
                 .catch(error => console.error('Erreur abandon:', error));
         }
@@ -445,6 +533,8 @@ async function goBack() {
         gameMode = null;
         gameOver = false;
         turnCount = 0;
+        currentSequence = "";
+        currentGameSessionId = null;
         isProcessing = false;
     }
 }
@@ -756,11 +846,19 @@ function getStatusLabel(status) {
 
 async function replayGame(gameId) {
     try {
+        // Nettoyer les anciens messages avant de charger la nouvelle partie
+        const gameMessage = document.getElementById("gameMessage");
+        if (gameMessage) gameMessage.remove();
+        
+        const suggestionDiv = document.getElementById("suggestionMessage");
+        if (suggestionDiv) suggestionDiv.style.display = "none";
+        
         const response = await fetch(`/api/game/load/${gameId}`);
         const gameData = await response.json();
         
         console.log('Game Data:', gameData);
         console.log('Sequence:', gameData.sequence);
+        console.log('Game Status:', gameData.gameStatus);
         
         closeGameHistory();
         
@@ -770,7 +868,9 @@ async function replayGame(gameId) {
         currentPlayer = 1;
         gameOver = false;
         turnCount = 0;
-        gameMode = 'replay';
+        // Si la partie est EN_COURS, on peut la continuer et changer le mode
+        // Si la partie est TERMINEE, c'est un replay de passé (pas de modification possible)
+        gameMode = (gameData.gameStatus === 'EN_COURS') ? 'jvj' : 'replay';
         
         const newGame = {
             board: [
@@ -792,6 +892,12 @@ async function replayGame(gameId) {
         
         if (gameData.sequence) {
             console.log('Raw sequence:', gameData.sequence);
+            
+            // Sauvegarder la séquence pour les futurs coups
+            if (gameData.gameStatus === 'EN_COURS') {
+                currentSequence = gameData.sequence;
+                currentGameSessionId = gameId;
+            }
             
             const moves = gameData.sequence.split('').filter(m => m.trim());
             
@@ -826,14 +932,48 @@ async function replayGame(gameId) {
         updateStatusMessage();
         updateGameInfo();
         
-        const buttonGroup = document.querySelector('.button-group');
-        if (buttonGroup) {
-            buttonGroup.style.opacity = '0.5';
-            const buttons = buttonGroup.querySelectorAll('button');
-            buttons.forEach(btn => btn.disabled = true);
+        // Désactiver les boutons seulement si la partie est terminée (replay)
+        if (gameData.gameStatus === 'TERMINEE' || gameData.gameStatus === 'ABANDONNEE') {
+            const buttonGroup = document.querySelector('.button-group');
+            if (buttonGroup) {
+                buttonGroup.style.opacity = '0.5';
+                const buttons = buttonGroup.querySelectorAll('button');
+                buttons.forEach(btn => btn.disabled = true);
+            }
         }
         
-        alert(`Replay de la partie #${gameId} - ${turnCount} coups joués`);
+        const statusText = gameData.gameStatus === 'EN_COURS' 
+            ? `Continuation de la partie #${gameId} - ${turnCount} coups joués (Partie EN COURS)` 
+            : `Replay de la partie #${gameId} - ${turnCount} coups joués`;
+        alert(statusText);
+        
+        // Synchroniser le backend pour récupérer les winningPositions (même si TERMINEE ou ABANDONNEE)
+        try {
+            const continueResponse = await fetch(`/api/game/continue/${gameId}`, {
+                method: 'POST'
+            });
+            if (continueResponse.ok) {
+                const backendState = await continueResponse.json();
+                // Mettre à jour le plateau avec les données du backend qui incluent les winningPositions
+                currentPlayer = backendState.currentPlayer;
+                gameOver = backendState.gameOver;
+                
+                // IMPORTANT: Mettre à jour la sequence avec celle du backend
+                // Sinon les prochains mouvements n'auront pas la bonne séquence
+                if (backendState.sequence) {
+                    currentSequence = backendState.sequence;
+                    console.log('Updated currentSequence from backend:', currentSequence);
+                }
+                
+                // Utiliser le plateau du backend avec les winningPositions
+                afficherGameBoard(backendState);
+                updateStatusMessage();
+            } else {
+                console.error('Erreur lors de la synchronisation du backend');
+            }
+        } catch (error) {
+            console.error('Erreur lors de la sync backend:', error);
+        }
         
     } catch (error) {
         console.error('Erreur lors du chargement de la partie:', error);
@@ -923,41 +1063,261 @@ window.addEventListener('load', () => {
 /**
  * Analyser une image du plateau Puissance 4
  */
-async function analyzeImage() {
-    const fileInput = document.getElementById('imageUpload');
-    const file = fileInput.files[0];
+/**
+ * Définir la perspective pour l'analyse (quel jeton on choisit)
+ */
+function setAnalysisPerspective(player) {
+    analysisPerspective = player;
+    document.getElementById('perspectiveBtn1').style.opacity = player === 1 ? '1' : '0.6';
+    document.getElementById('perspectiveBtn2').style.opacity = player === 2 ? '1' : '0.6';
+}
+
+/**
+ * Définir le rôle du joueur pour l'analyse (position de jeu: 1er ou 2ème)
+ */
+function setAnalysisPlayerRole(role) {
+    analysisPlayerRole = role;
+    document.getElementById('roleBtn1').style.opacity = role === 1 ? '1' : '0.6';
+    document.getElementById('roleBtn2').style.opacity = role === 2 ? '1' : '0.6';
+}
+
+/**
+ * Analyser une séquence de coups pour voir combien de coups supplémentaires
+ * il faut pour gagner
+ */
+async function analyzeGameSequence() {
+    const sequence = document.getElementById('sequenceAnalysisInput').value.trim();
+    const difficulty = document.getElementById('analysisDifficultySelect').value;
+    const resultDiv = document.getElementById('sequenceAnalysisResult');
     
-    if (!file) {
-        document.getElementById('analysisResult').textContent = ' Veuillez sélectionner une image';
+    // Vérifier que les sélections sont faites
+    if (!analysisPerspective) {
+        resultDiv.textContent = '⚠️ Veuillez choisir un jeton (Rouge ou Jaune)';
+        resultDiv.style.display = 'block';
+        resultDiv.style.borderLeftColor = '#ff6b6b';
         return;
     }
     
-    const formData = new FormData();
-    formData.append('image', file);
+    if (!analysisPlayerRole) {
+        resultDiv.textContent = '⚠️ Veuillez choisir votre position de jeu (Joueur 1 ou 2)';
+        resultDiv.style.display = 'block';
+        resultDiv.style.borderLeftColor = '#ff6b6b';
+        return;
+    }
+    
+    if (!sequence) {
+        resultDiv.textContent = '⚠️ Veuillez entrer une séquence';
+        resultDiv.style.display = 'block';
+        resultDiv.style.borderLeftColor = '#ff6b6b';
+        return;
+    }
+    
+    // Valider la séquence
+    if (!/^\d+$/.test(sequence)) {
+        resultDiv.textContent = '⚠️ La séquence doit contenir uniquement des chiffres (1-9)';
+        resultDiv.style.display = 'block';
+        resultDiv.style.borderLeftColor = '#ff6b6b';
+        return;
+    }
+    
+    // Vérifier que tous les chiffres sont entre 1 et 9
+    for (let char of sequence) {
+        let col = parseInt(char);
+        if (col < 1 || col > 9) {
+            resultDiv.textContent = `⚠️ Colonne invalide: ${col} (doit être entre 1 et 9)`;
+            resultDiv.style.display = 'block';
+            resultDiv.style.borderLeftColor = '#ff6b6b';
+            return;
+        }
+    }
+    
+    resultDiv.textContent = '⏳ Analyse en cours...';
+    resultDiv.style.display = 'block';
+    resultDiv.style.borderLeftColor = '#fbbf24';
     
     try {
-        document.getElementById('analysisResult').textContent = ' Analyse en cours...';
-        
-        const response = await fetch('/api/game/analyze-image', {
+        const response = await fetch('/api/game/analyze-sequence', {
             method: 'POST',
-            body: formData
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `sequence=${encodeURIComponent(sequence)}&difficulty=${encodeURIComponent(difficulty)}&perspective=${encodeURIComponent(analysisPerspective)}&playerRole=${encodeURIComponent(analysisPlayerRole)}`
         });
         
         const result = await response.json();
         
-        if (!response.ok) {
-            document.getElementById('analysisResult').textContent = ` Erreur: ${result.error}`;
+        if (!response.ok || !result.success) {
+            resultDiv.innerHTML = `❌ Erreur: ${result.error || 'Impossible d\'analyser'}`;
+            resultDiv.style.borderLeftColor = '#ff6b6b';
             return;
         }
         
-        let resultText = `<strong> Plateau reconnu!</strong><br>`;
-        resultText += `Meilleur coup: <strong>Colonne ${result.bestMove}</strong><br>`;
-        resultText += `Score: ${result.score}<br>`;
-        resultText += `Prédiction: ${result.prediction}`;
+        // Fermer le modal et charger le jeu avec la séquence
+        closeSequenceAnalysisModal();
+        loadSequenceAnalysis(result, analysisPerspective);
         
-        document.getElementById('analysisResult').innerHTML = resultText;
     } catch (error) {
-        console.error('Erreur analyse:', error);
-        document.getElementById('analysisResult').textContent = ' Erreur lors de l\'analyse';
+        console.error('Erreur lors de l\'analyse:', error);
+        resultDiv.textContent = '❌ Erreur lors de l\'analyse: ' + error.message;
+        resultDiv.style.borderLeftColor = '#ff6b6b';
     }
+}
+
+/**
+ * Afficher les résultats de l'analyse de séquence
+ */
+function displaySequenceAnalysisResult(result, resultDiv, perspective) {
+    let html = '';
+    const perspectiveName = perspective === 1 ? '🔴 ROUGE (Joueur 1)' : '🟡 JAUNE (Joueur 2)';
+    
+    // En-tête avec résumé
+    html += `<div style="margin-bottom:8px; padding:6px; background:${perspective === 1 ? '#fee2e2' : '#fef3c7'}; border-radius:3px;">`;
+    html += `<strong>📊 ANALYSE - Perspective: ${perspectiveName}</strong><br>`;
+    html += `</div>`;
+    
+    // Informations de base
+    html += `<div style="margin:8px 0; line-height:1.8; font-size:0.9em;">`;
+    html += `📌 <strong>Séquence:</strong> ${result.initialSequence}<br>`;
+    html += `Coups actuels: <strong>${result.initialMoves}</strong><br>`;
+    
+    // RÉSULTAT PRINCIPAL - En gros et clair
+    if (result.gameFinished) {
+        if (result.winner === perspective) {
+            // Le joueur analysé gagne !
+            html += `<div style="background:#d1fae5; border:2px solid #10b981; padding:8px; border-radius:5px; margin:10px 0; text-align:center;">`;
+            html += `<span style="font-size:1.1em; font-weight:bold; color:#10b981;">🎉 VICTOIRE!</span><br>`;
+            html += `<span style="color:#059669; font-weight:bold;">En ${result.totalMovesInGame} coups total</span><br>`;
+            html += `<span style="font-size:0.9em; color:#047857;">Coups supplémentaires: <strong>${result.additionalMovesNeededToFinish}</strong></span>`;
+            html += `</div>`;
+        } else if (result.winner === 0) {
+            // Nul
+            html += `<div style="background:#f3f4f6; border:2px solid #6b7280; padding:8px; border-radius:5px; margin:10px 0; text-align:center;">`;
+            html += `<span style="font-size:1.1em; font-weight:bold; color:#6b7280;">🤝 MATCH NUL</span><br>`;
+            html += `<span style="color:#4b5563;">Au bout de ${result.totalMovesInGame} coups</span>`;
+            html += `</div>`;
+        } else {
+            // L'adversaire gagne
+            html += `<div style="background:#fee2e2; border:2px solid #ef4444; padding:8px; border-radius:5px; margin:10px 0; text-align:center;">`;
+            html += `<span style="font-size:1.1em; font-weight:bold; color:#ef4444;">❌ DÉFAITE</span><br>`;
+            html += `<span style="color:#991b1b;">L'adversaire gagne en ${result.totalMovesInGame} coups</span>`;
+            html += `</div>`;
+        }
+    } else {
+        // Partie pas finie - montrer combien il faut de coups pour gagner
+        html += `<div style="background:#e0e7ff; border:2px solid #4f46e5; padding:8px; border-radius:5px; margin:10px 0; text-align:center;">`;
+        html += `<span style="font-size:1.1em; font-weight:bold; color:#4f46e5;">⏳ PARTIE EN COURS</span><br>`;
+        html += `<span style="color:#3730a3; font-weight:bold;">Coups needed pour finir:</span><br>`;
+        html += `<span style="font-size:1.2em; color:#4f46e5; font-weight:bold;">${result.additionalMovesNeededToFinish} coup${result.additionalMovesNeededToFinish > 1 ? 's' : ''}</span>`;
+        html += `</div>`;
+    }
+    
+    html += `</div>`;
+    
+    // Séquence finale en détail
+    if (result.finalSequence && result.finalSequence !== result.initialSequence) {
+        html += `<div style="margin:8px 0; padding:6px; background:#f9fafb; border-radius:3px; border:1px solid #e5e7eb;">`;
+        html += `<strong>🎲 Séquence complète:</strong><br>`;
+        html += `<span style="font-family:consolas; font-size:1em; font-weight:bold; color:#1f2937;">${result.finalSequence}</span>`;
+        html += `</div>`;
+    }
+    
+    resultDiv.innerHTML = html;
+    resultDiv.style.display = 'block';
+    
+    // Couleur de bordure selon le résultat
+    if (result.winner === perspective) {
+        resultDiv.style.borderLeftColor = '#10b981'; // Vert = victoire
+    } else if (result.winner === 0 && result.gameFinished) {
+        resultDiv.style.borderLeftColor = '#6b7280'; // Gris = nul
+    } else if (!result.gameFinished) {
+        resultDiv.style.borderLeftColor = '#4f46e5'; // Bleu = en cours
+    } else {
+        resultDiv.style.borderLeftColor = '#ff6b6b'; // Rouge = défaite
+    }
+}
+
+/**
+ * Ouvrir le modal d'analyse de séquence
+ */
+function openSequenceAnalysisModal() {
+    analysisPerspective = 1; // Réinitialiser à Rouge par défaut
+    document.getElementById('sequenceAnalysisInput').value = '';
+    document.getElementById('sequenceAnalysisResult').style.display = 'none';
+    document.getElementById('perspectiveBtn1').style.opacity = '1';
+    document.getElementById('perspectiveBtn2').style.opacity = '0.6';
+    document.getElementById('sequenceAnalysisModal').style.display = 'flex';
+    document.getElementById('sequenceAnalysisModal').style.justifyContent = 'center';
+    document.getElementById('sequenceAnalysisModal').style.alignItems = 'center';
+}
+
+/**
+ * Fermer le modal d'analyse de séquence
+ */
+function closeSequenceAnalysisModal() {
+    document.getElementById('sequenceAnalysisModal').style.display = 'none';
+}
+
+/**
+ * Charger l'analyse de séquence et afficher la grille
+ */
+async function loadSequenceAnalysis(result, perspective) {
+    // Initialize game state
+    playerColor = perspective === 1 ? 'red' : 'yellow';
+    gameMode = 'jvia';
+    aiDifficulty = parseInt(result.difficulty);
+    turnCount = result.initialMoves;
+    
+    // Afficher la grille
+    document.getElementById("choix").style.display = "none";
+    document.querySelector(".game-container").style.display = "flex";
+    
+    // Afficher l'analyse statut
+    const perspectiveName = result.playerTokenColor || (perspective === 1 ? '🔴 ROUGE' : '🟡 JAUNE');
+    const playerPositionName = result.playerPositionName || (perspective === 1 ? 'Joueur 1 (Premier)' : 'Joueur 2 (Deuxième)');
+    const statusMsg = document.getElementById('statusMessage');
+    
+    let statusText = `ANALYSE SÉQUENCE\n`;
+    statusText += `${perspectiveName} - ${playerPositionName}\n`;
+    statusText += `Séquence initiale: ${result.initialSequence}\n`;
+    
+    if (result.gameFinished) {
+        if (result.winner === perspective) {
+            statusText += `🎉 VICTOIRE! En ${result.totalMovesInGame} coups total\n`;
+            statusText += `(+${result.additionalMovesNeededToFinish} coup${result.additionalMovesNeededToFinish > 1 ? 's' : ''})`;
+        } else if (result.winner === 0) {
+            statusText += `🤝 MATCH NUL - Au bout de ${result.totalMovesInGame} coups`;
+        } else {
+            statusText += `❌ DÉFAITE - Adversaire gagne en ${result.totalMovesInGame} coups`;
+        }
+    } else {
+        statusText += `PARTIE EN COURS\n`;
+        statusText += `Coups needed pour finir: ${result.additionalMovesNeededToFinish} coup${result.additionalMovesNeededToFinish > 1 ? 's' : ''}`;
+    }
+    
+    statusMsg.textContent = statusText;
+    
+    // Créer le plateau initial
+    const initialBoard = result.board || Array(result.rows || 9).fill().map(() => Array(result.cols || 9).fill(0));
+    
+    const gameData = {
+        board: initialBoard,
+        rows: result.rows || 9,
+        cols: result.cols || 9,
+        currentPlayer: result.currentPlayer || (result.winner ? result.winner : 1),
+        gameOver: result.gameFinished || false,
+        suggestedColumn: result.winningMove,
+        score: result.additionalMovesNeededToFinish,
+        prediction: result.gameFinished ? (result.winner === perspective ? 'victoire' : (result.winner === 0 ? 'nul' : 'defaite')) : 'incertaine',
+        winningPositions: result.winningPositions || []
+    };
+    
+    afficherGameBoard(gameData);
+    
+    // Afficher suggestion si elle existe
+    const suggestionDiv = document.getElementById('suggestionMessage');
+    suggestionDiv.style.display = 'none';
+    
+    // Désactiver les clics sur le plateau
+    document.getElementById('gameBoard').style.pointerEvents = 'none';
+    document.getElementById('gameBoard').style.opacity = '0.9';
 }

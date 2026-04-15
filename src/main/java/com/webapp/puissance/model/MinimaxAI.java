@@ -17,27 +17,24 @@ public class MinimaxAI {
         int bestCol = -1;
         int bestScore = Integer.MIN_VALUE;
         
-        // Check if we can win immediately
         for (int c = 0; c < game.getCols(); c++) {
             int[][] copy = copyBoard(board);
             int r = Game.dropOnBoard(copy, c, me);
             if (r == -1) continue;
             if (Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
-                return c; // Win immediately!
+                return c;
             }
         }
         
-        // Check if we need to block opponent's win
         int opponent = 3 - me;
         for (int c = 0; c < game.getCols(); c++) {
             int[][] copy = copyBoard(board);
             int r = Game.dropOnBoard(copy, c, opponent);
             if (r != -1 && Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
-                return c; // Block opponent's win!
+                return c;
             }
         }
         
-        // Otherwise, find best move using minimax
         for (int c = 0; c < game.getCols(); c++) {
             int[][] copy = copyBoard(board);
             int r = Game.dropOnBoard(copy, c, me);
@@ -60,7 +57,6 @@ public class MinimaxAI {
         return -1;
     }
 
-    // Return score for every column (Integer.MIN_VALUE for invalid/full columns)
     public int[] columnScores(Game game) {
         int cols = game.getCols();
         int[][] board = game.getBoardCopy();
@@ -75,17 +71,15 @@ public class MinimaxAI {
                 continue;
             }
             
-            // Check immediate win
             if (Game.checkWinOnBoard(copy, r, c, game.getWinLength())) {
                 scores[c] = 100000;
                 continue;
             }
             
-            // Check if we need to block
             int[][] copy2 = copyBoard(board);
             int r2 = Game.dropOnBoard(copy2, c, opponent);
             if (r2 != -1 && Game.checkWinOnBoard(copy2, r2, c, game.getWinLength())) {
-                scores[c] = 50000; // High priority blocking move
+                scores[c] = 50000; 
                 continue;
             }
             
@@ -105,7 +99,7 @@ public class MinimaxAI {
                 int[][] copy = copyBoard(board);
                 int r = Game.dropOnBoard(copy, c, currentPlayer);
                 if (r == -1) continue;
-                if (Game.checkWinOnBoard(copy, r, c, winLength)) return 1000 / depth; // quicker win better
+                if (Game.checkWinOnBoard(copy, r, c, winLength)) return 1000 / depth;
                 int val = minimax(copy, winLength, depth + 1, false, 3 - currentPlayer);
                 best = Math.max(best, val);
             }
@@ -127,34 +121,30 @@ public class MinimaxAI {
         int score = 0;
         int rows = board.length;
         int cols = board[0].length;
-        
-        // Check all positions for winning threats
+
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 int p = board[r][c];
                 if (p == 0) continue;
                 
-                // Check if position is part of a winning line
+
                 if (Game.checkWinOnBoard(board, r, c, winLength)) {
-                    if (p == me) return 10000;  // Our win detected
-                    else return -10000;          // Opponent win detected
+                    if (p == me) return 10000;  
+                    else return -10000;          
                 }
             }
         }
-        
-        // Heuristic: count potential sequences
+
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
                 int p = board[r][c];
                 if (p == 0) continue;
                 
-                // Favor center columns
                 int centerDist = Math.abs(c - cols / 2);
                 int centerBonus = (cols / 2) - centerDist;
                 
                 if (p == me) {
                     score += centerBonus;
-                    // Bonus for middle position
                     if (c >= cols / 3 && c < 2 * cols / 3) score += 10;
                 } else {
                     score -= centerBonus;

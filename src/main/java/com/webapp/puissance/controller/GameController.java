@@ -69,7 +69,16 @@ public class GameController {
      * @return JSON avec l'état mis à jour
      */
     @PostMapping("/move")
-    public ResponseEntity<Map<String, Object>> playMove(@RequestParam int column) {
+    public ResponseEntity<Map<String, Object>> playMove(
+            @RequestParam int column,
+            @RequestParam(required = false) String sequence) {
+        
+        // Si une séquence est fournie, reconstruire le jeu avec tous les coups précédents
+        // Cela garantit la synchronisation entre frontend et backend
+        if (sequence != null && !sequence.isEmpty()) {
+            gameService.rebuildGameFromSequence(sequence);
+        }
+        
         int row = gameService.playMove(column);
         
         if (row == -1) {
@@ -113,11 +122,19 @@ public class GameController {
     /**
      * L'IA joue automatiquement son coup
      * POST /api/game/ai-move
+     * @param sequence la séquence des coups (pour resynchroniser le frontend et backend)
      * @return JSON avec l'état après le coup de l'IA
      */
     @PostMapping("/ai-move")
-    public ResponseEntity<Map<String, Object>> playAIMove() {
+    public ResponseEntity<Map<String, Object>> playAIMove(
+            @RequestParam(required = false) String sequence) {
         try {
+            // Si une séquence est fournie, reconstruire le jeu avec tous les coups précédents
+            // Cela garantit la synchronisation entre frontend et backend
+            if (sequence != null && !sequence.isEmpty()) {
+                gameService.rebuildGameFromSequence(sequence);
+            }
+            
             int row = gameService.playAIMove();
             
             if (row == -1) {
@@ -196,11 +213,33 @@ public class GameController {
         response.put("currentPlayer", 1);
         response.put("gameOver", session.isGameOver());
         response.put("status", session.getStatus());
+        response.put("gameStatus", session.getStatus());  // Ajouter gameStatus pour le frontend
         response.put("sequence", session.getSequence());
         response.put("nbCoups", session.getNbCoups());
         response.put("winner", session.getWinner());
         response.put("mode", session.getMode());
         response.put("createdAt", session.getCreatedAt());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Charger une partie EN_COURS pour la continuer
+     * POST /api/game/continue/{id}
+     * @param id l'ID de la partie
+     * @return JSON avec l'état de la partie prête à être continuée
+     */
+    @PostMapping("/continue/{id}")
+    public ResponseEntity<Map<String, Object>> continueGame(@PathVariable Long id) {
+        GameSession session = gameService.loadGameToContinue(id);
+        if (session == null) {
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Partie non trouvée ou pas EN_COURS"));
+        }
+        
+        Game game = gameService.getCurrentGame();
+        Map<String, Object> response = buildGameResponse(game);
+        response.put("gameSessionId", id);
+        response.put("message", "Partie chargée pour continuation");
         return ResponseEntity.ok(response);
     }
 
@@ -398,6 +437,60 @@ public class GameController {
     }
     
     /**
+     * Analyser une séquence de coups pour voir combien de coups supplémentaires
+     * il faut pour que le joueur spécifié gagne
+     * POST /api/game/analyze-sequence
+     * @param sequence la séquence des coups (ex: "3131313")
+     * @param difficulty niveau de difficulté de l'IA (1-6, défaut 3)
+     * @param perspective quel joueur on analyse (1=Rouge/Joueur1, 2=Jaune/Joueur2, défaut 1)
+     * @param playerRole position de jeu du joueur analysé (1=Joueur1/Premier, 2=Joueur2/Deuxième, défaut 1)
+     * @return JSON avec l'analyse complète
+     */
+    @PostMapping("/analyze-sequence")
+    public ResponseEntity<Map<String, Object>> analyzeSequence(
+            @RequestParam("sequence") String sequence,
+            @RequestParam(value = "difficulty", defaultValue = "3") int difficulty,
+            @RequestParam(value = "perspective", defaultValue = "1") int perspective,
+            @RequestParam(value = "playerRole", defaultValue = "1") int playerRole) {
+        try {
+            if (sequence == null || sequence.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "La séquence ne peut pas être vide"));
+            }
+            
+            // Valider les caractères
+            if (!sequence.matches("\\d+")) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("success", false, "error", "La séquence doit contenir uniquement des chiffres"));
+            }
+            
+            // Valider la perspective
+            if (perspective != 1 && perspective != 2) {
+                perspective = 1; // Défaut à Rouge
+            }
+            
+            // Valider le rôle du joueur
+            if (playerRole != 1 && playerRole != 2) {
+                playerRole = 1; // Défaut à Joueur 1
+            }
+            
+            Map<String, Object> result = gameService.analyzeSequence(sequence, difficulty, perspective, playerRole);
+            
+            if ((boolean) result.get("success")) {
+                return ResponseEntity.ok(result);
+            } else {
+                return ResponseEntity.badRequest().body(result);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", false);
+            response.put("error", "Erreur lors de l'analyse: " + e.getMessage());
+            return ResponseEntity.status(500).body(response);
+        }
+    }
+    
+    /**
      * Construire la réponse JSON avec toutes les infos du jeu
      */
     private Map<String, Object> buildGameResponse(Game game) {
@@ -412,6 +505,7 @@ public class GameController {
         response.put("moveHistory", game.getMoveHistory());
         response.put("aiMode", gameService.isAIMode());
         response.put("aiDifficulty", gameService.getAIDifficulty());
+        response.put("sequence", gameService.getCurrentSequence()); // Ajouter la sequence
         return response;
     }
 }
